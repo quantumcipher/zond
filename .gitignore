@@ -4,4 +4,3 @@ cmd/zond/zond-cli
 bazel-*
 wallet/wallet_new.txt
 zond
-Footer
