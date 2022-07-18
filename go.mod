@@ -6,6 +6,7 @@ require (
 	github.com/beevik/ntp v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/ghodss/yaml v1.0.0
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/gorilla/mux v1.8.0
 	github.com/libp2p/go-libp2p v0.13.0

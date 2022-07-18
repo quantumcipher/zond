@@ -177,7 +177,7 @@ func (b *Block) ProcessEpochMetaData(epochMetaData *metadata.EpochMetaData,
 	return nil
 }
 
-func (b *Block) CommitGenesis(db *db.DB) error {
+func (b *Block) CommitGenesis(db db.DB) error {
 	blockProposerXMSSAddress := config.GetDevConfig().Genesis.FoundationXMSSAddress
 	blockHeader := b.Header()
 	blockHeaderHash := b.HeaderHash()
@@ -286,7 +286,7 @@ func (b *Block) CommitGenesis(db *db.DB) error {
 	return stateContext.Commit(GetBlockStorageKey(blockHeaderHash), bytesBlock, true)
 }
 
-func (b *Block) Commit(db *db.DB, finalizedHeaderHash []byte, isFinalizedState bool) error {
+func (b *Block) Commit(db db.DB, finalizedHeaderHash []byte, isFinalizedState bool) error {
 	/* TODO:
 	1. Calculate EpochMetaData
 	2. Validate Block
@@ -434,7 +434,7 @@ func NewBlock(networkId uint64, timestamp uint64, proposerAddress []byte, slotNu
 	return b
 }
 
-func (b *Block) UpdateFinalizedEpoch(db *db.DB, stateContext *state.StateContext) error {
+func (b *Block) UpdateFinalizedEpoch(db db.DB, stateContext *state.StateContext) error {
 	currentEpochMetaData := stateContext.GetEpochMetaData()
 	// Ignore Finalization if TotalStakeAmountFound is less than the 2/3rd of TotalStakeAmountAlloted
 	if currentEpochMetaData.TotalStakeAmountFound()*3 < currentEpochMetaData.TotalStakeAmountAlloted()*2 {
@@ -521,7 +521,7 @@ func (b *Block) UpdateFinalizedEpoch(db *db.DB, stateContext *state.StateContext
 	return stateContext.Finalize(blockMetaDataPathForFinalization)
 }
 
-func CalculateEpochMetaData(db *db.DB, slotNumber uint64,
+func CalculateEpochMetaData(db db.DB, slotNumber uint64,
 	parentHeaderHash []byte, parentSlotNumber uint64) (*metadata.EpochMetaData, error) {
 
 	blocksPerEpoch := config.GetDevConfig().BlocksPerEpoch
@@ -620,7 +620,7 @@ func GetBlockStorageKey(blockHeaderHash []byte) []byte {
 	return []byte(fmt.Sprintf("BLOCK-%s", blockHeaderHash))
 }
 
-func GetBlock(db *db.DB, blockHeaderHash []byte) (*Block, error) {
+func GetBlock(db db.DB, blockHeaderHash []byte) (*Block, error) {
 	data, err := db.Get(GetBlockStorageKey(blockHeaderHash))
 	if err != nil {
 		return nil, err

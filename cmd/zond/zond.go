@@ -28,7 +28,7 @@ func ConfigCheck() bool {
 	return true
 }
 
-func run(c *chain.Chain, db *db.DB, keys crypto.PrivKey) error {
+func run(c *chain.Chain, db db.DB, keys crypto.PrivKey) error {
 	srv, err := p2p.NewServer(c)
 	if err != nil {
 		log.Error("Failed to initialize server")

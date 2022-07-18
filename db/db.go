@@ -10,7 +10,14 @@ import (
 	"time"
 )
 
-type DB struct {
+type DB interface {
+	Get(key []byte) ([]byte, error)
+	GetFromBucket(key []byte, bucket []byte) ([]byte, error)
+	Close()
+	DB() *bbolt.DB
+}
+
+type BoultDB struct {
 	db *bbolt.DB
 
 	filename string
@@ -19,7 +26,7 @@ type DB struct {
 	exitLock sync.Mutex
 }
 
-func NewDB(directory string, filename string) (*DB, error) {
+func NewDB(directory string, filename string) (*BoultDB, error) {
 	dbDir := path.Join(directory, filename)
 	db, err := bbolt.Open(dbDir, 0600, &bbolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
 
@@ -36,13 +43,13 @@ func NewDB(directory string, filename string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DB {
+	return &BoultDB {
 		filename: filename,
 		db:       db,
 	}, nil
 }
 
-func (db *DB) Get(key []byte) ([]byte, error) {
+func (db *BoultDB) Get(key []byte) ([]byte, error) {
 	defer db.Lock.RUnlock()
 	db.Lock.RLock()
 
@@ -60,7 +67,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return value, err
 }
 
-func (db *DB) GetFromBucket(key []byte, bucket []byte) ([]byte, error) {
+func (db *BoultDB) GetFromBucket(key []byte, bucket []byte) ([]byte, error) {
 	defer db.Lock.RUnlock()
 	db.Lock.RLock()
 
@@ -81,7 +88,7 @@ func (db *DB) GetFromBucket(key []byte, bucket []byte) ([]byte, error) {
 	return value, err
 }
 
-func (db *DB) Close() {
+func (db *BoultDB) Close() {
 	db.exitLock.Lock()
 	defer db.exitLock.Unlock()
 
@@ -94,6 +101,6 @@ func (db *DB) Close() {
 
 }
 
-func (db *DB) DB() *bbolt.DB {
+func (db *BoultDB) DB() *bbolt.DB {
 	return db.db
 }

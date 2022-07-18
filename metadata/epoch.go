@@ -136,7 +136,7 @@ func NewEpochMetaData(epoch uint64, prevSlotLastBlockHeaderHash []byte,
 	}
 }
 
-func GetEpochMetaData(db *db.DB, currentBlockSlotNumber uint64, parentHeaderHash []byte) (*EpochMetaData, error) {
+func GetEpochMetaData(db db.DB, currentBlockSlotNumber uint64, parentHeaderHash []byte) (*EpochMetaData, error) {
 	var prevSlotLastBlockHeaderHash []byte
 
 	blocksPerEpoch := config.GetDevConfig().BlocksPerEpoch

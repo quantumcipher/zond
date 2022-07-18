@@ -70,7 +70,7 @@ func NewMainChainMetaData(finalizedBlockHeaderHash []byte, finalizedBlockSlotNum
 	}
 }
 
-func GetMainChainMetaData(d *db.DB) (*MainChainMetaData, error) {
+func GetMainChainMetaData(d db.DB) (*MainChainMetaData, error) {
 	key := GetMainChainMetaDataKey()
 	data, err := d.Get(key)
 	if err != nil {

@@ -80,7 +80,7 @@ func NewOTSIndexMetaData(address []byte, pageNumber uint64) *OTSIndexMetaData {
 	}
 }
 
-func GetOTSIndexMetaData(db *db.DB, address []byte, otsIndex uint64,
+func GetOTSIndexMetaData(db db.DB, address []byte, otsIndex uint64,
 	headerHash []byte, finalizedHeaderHash []byte) (*OTSIndexMetaData, error) {
 	key := GetOTSIndexMetaDataKeyByOTSIndex(address, otsIndex)
 	data, err := GetDataByBucket(db, key, headerHash, finalizedHeaderHash)

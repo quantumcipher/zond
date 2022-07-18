@@ -29,7 +29,7 @@ func LoadPreState() (*protos.PreState, error) {
 	return preState, nil
 }
 
-func ProcessPreState(preState *protos.PreState, b *block.Block, db *db.DB) error {
+func ProcessPreState(preState *protos.PreState, b *block.Block, db db.DB) error {
 	m := metadata.NewMainChainMetaData(nil, 0,
 		nil, 0)
 	totalStakeAmount, _ := big.NewInt(0).MarshalText()
@@ -62,7 +62,7 @@ func ProcessPreState(preState *protos.PreState, b *block.Block, db *db.DB) error
 	})
 }
 
-func ProcessGenesisBlock(db *db.DB) error {
+func ProcessGenesisBlock(db db.DB) error {
 	jsonData, err := yaml.YAMLToJSON(devnet.DevnetGenesisData["genesis.yml"])
 	if err != nil {
 		return err

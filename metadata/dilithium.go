@@ -83,7 +83,7 @@ func NewDilithiumMetaData(txHash []byte, dilithiumPK []byte, address []byte, sta
 	}
 }
 
-func GetDilithiumMetaData(db *db.DB, dilithiumPK []byte,
+func GetDilithiumMetaData(db db.DB, dilithiumPK []byte,
 	headerHash []byte, finalizedHeaderHash []byte) (*DilithiumMetaData, error) {
 	key := GetDilithiumMetaDataKey(dilithiumPK)
 
@@ -107,7 +107,7 @@ func GetDilithiumMetaDataKey(dilithiumPK []byte) []byte {
 	return []byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(dilithiumPK)))
 }
 
-func GetXMSSAddressFromDilithiumPK(db *db.DB, dilithiumPK []byte,
+func GetXMSSAddressFromDilithiumPK(db db.DB, dilithiumPK []byte,
 	headerHash []byte, finalizedHeaderHash []byte) ([]byte, error) {
 
 	dm, err := GetDilithiumMetaData(db, dilithiumPK,

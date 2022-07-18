@@ -25,7 +25,7 @@ type POS struct {
 	config *config.Config
 	srv    *p2p.Server
 	chain  *chain.Chain
-	db     *db.DB
+	db     db.DB
 
 	// Dilithium PK is the key of this map
 	validators map[string]*dilithium.Dilithium
@@ -412,7 +412,7 @@ func (p *POS) Stop() {
 	return
 }
 
-func NewPOS(srv *p2p.Server, chain *chain.Chain, db *db.DB) *POS {
+func NewPOS(srv *p2p.Server, chain *chain.Chain, db db.DB) *POS {
 	pos := &POS{
 		config:     config.GetConfig(),
 		srv:        srv,

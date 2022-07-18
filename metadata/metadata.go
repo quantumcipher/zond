@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func GetDataByBucket(db *db.DB, key []byte, headerHash []byte, finalizedHeaderHash []byte) ([]byte, error) {
+func GetDataByBucket(db db.DB, key []byte, headerHash []byte, finalizedHeaderHash []byte) ([]byte, error) {
 	var data []byte
 	var err error
 

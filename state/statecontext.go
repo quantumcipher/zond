@@ -17,7 +17,7 @@ import (
 )
 
 type StateContext struct {
-	db             *db.DB
+	db             db.DB
 	addressesState map[string]*address.AddressState
 	dilithiumState map[string]*metadata.DilithiumMetaData
 	slaveState     map[string]*metadata.SlaveMetaData
@@ -535,7 +535,7 @@ func (s *StateContext) Finalize(blockMetaDataPathForFinalization []*metadata.Blo
 	})
 }
 
-func NewStateContext(db *db.DB, slotNumber uint64,
+func NewStateContext(db db.DB, slotNumber uint64,
 	blockProposer []byte, finalizedHeaderHash []byte,
 	parentBlockHeaderHash []byte, blockHeaderHash []byte,
 	partialBlockSigningHash []byte, blockSigningHash []byte,

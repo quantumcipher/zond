@@ -81,7 +81,7 @@ func NewBlockMetaData(parentHeaderHash []byte, headerHash []byte,
 	}
 }
 
-func GetBlockMetaData(d *db.DB, headerHash []byte) (*BlockMetaData, error) {
+func GetBlockMetaData(d db.DB, headerHash []byte) (*BlockMetaData, error) {
 	key := GetBlockMetaDataKey(headerHash)
 	data, err := d.Get(key)
 	if err != nil {
