@@ -3,6 +3,7 @@ package address
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/theQRL/zond/db"
 	"github.com/theQRL/zond/metadata"

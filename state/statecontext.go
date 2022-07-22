@@ -4,6 +4,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"reflect"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/go-qrllib/xmss"
 	"github.com/theQRL/zond/address"
@@ -12,8 +15,6 @@ import (
 	"github.com/theQRL/zond/metadata"
 	"github.com/theQRL/zond/misc"
 	"go.etcd.io/bbolt"
-	"math/big"
-	"reflect"
 )
 
 type StateContext struct {
@@ -86,8 +87,10 @@ func (s *StateContext) ValidatorsToXMSSAddress() map[string][]byte {
 func (s *StateContext) processValidatorStakeAmount(dilithiumPK []byte) error {
 	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(dilithiumPK))
 	slotLeaderDilithiumMetaData, ok := s.dilithiumState[strKey]
+
+	hexPK := hex.EncodeToString(dilithiumPK)
 	if !ok {
-		return errors.New(fmt.Sprintf("validator dilithium state not found for %s", dilithiumPK))
+		return fmt.Errorf("validator dilithium state not found for %s", hexPK)
 	}
 	s.currentBlockTotalStakeAmount += slotLeaderDilithiumMetaData.Balance()
 	return nil
@@ -165,7 +168,7 @@ func (s *StateContext) GetAddressState(addr string) (*address.AddressState, erro
 	strKey := hex.EncodeToString(address.GetAddressStateKey(binAddr))
 	addressState, ok := s.addressesState[strKey]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Address %s not found in addressesState", addr))
+		return nil, fmt.Errorf("address %s not found in addressesState", addr)
 	}
 	return addressState, nil
 }
@@ -233,7 +236,7 @@ func (s *StateContext) GetDilithiumState(dilithiumPK string) *metadata.Dilithium
 		return nil
 	}
 	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(binDilithiumPk))
-	dilithiumState, _ := s.dilithiumState[strKey]
+	dilithiumState := s.dilithiumState[strKey]
 	return dilithiumState
 }
 
@@ -395,6 +398,7 @@ func (s *StateContext) Commit(blockStorageKey []byte, bytesBlock []byte, isFinal
 			log.Error("[Commit] Failed to commit BlockMetaData")
 			return err
 		}
+		fmt.Print("reached here")
 		err = s.epochBlockHashes.AddHeaderHashBySlotNumber(s.blockHeaderHash, s.slotNumber)
 		if err != nil {
 			log.Error("[Commit] Failed to Add HeaderHash into EpochBlockHashes")
@@ -490,7 +494,6 @@ func (s *StateContext) Finalize(blockMetaDataPathForFinalization []*metadata.Blo
 			hex.EncodeToString(bm.ParentHeaderHash()))
 		return err
 	}
-
 	return s.db.DB().Update(func(tx *bbolt.Tx) error {
 		var err error
 		mainBucket := tx.Bucket([]byte("DB"))

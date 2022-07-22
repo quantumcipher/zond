@@ -4,3 +4,5 @@ cmd/zond/zond-cli
 bazel-*
 wallet/wallet_new.txt
 zond
+state/testdb2.txt
+state/testdb.txt

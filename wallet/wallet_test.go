@@ -1,16 +1,16 @@
 package wallet
 
 import (
-	"testing"
 	"encoding/hex"
 	"errors"
-	"reflect"
-	"google.golang.org/protobuf/encoding/protojson"
 	"io/ioutil"
+	"reflect"
+	"testing"
+
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
+	"google.golang.org/protobuf/encoding/protojson"
 )
-
 
 func TestWalletCreation(t *testing.T) {
 	outFileName := "wallet_new.txt"
@@ -30,18 +30,17 @@ func TestWalletCreation(t *testing.T) {
 		t.Error("Unable to decode private key file", err)
 	}
 
-	expectedAddress := "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79"
+	expectedAddress := "000200135c81a9feb516c2c776b99d2c30de84c8"
 	expectedHexSeed := "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e00167939cb"
 
-	if(wallet.pbData.XmssInfo[0].Address != expectedAddress) {
+	if wallet.pbData.XmssInfo[0].Address != expectedAddress {
 		t.Fatalf("Address Mismatch\nExpected: %s\nFound: %s", expectedAddress, wallet.pbData.XmssInfo[0].Address)
 	}
 
-	if(wallet.pbData.XmssInfo[0].HexSeed != expectedHexSeed) {
+	if wallet.pbData.XmssInfo[0].HexSeed != expectedHexSeed {
 		t.Fatalf("HexSeed Mismatch\nExpected: %s\nFound: %s", expectedHexSeed, wallet.pbData.XmssInfo[0].HexSeed)
 	}
 }
-
 
 func TestWalletBalance(t *testing.T) {
 	subtests := []struct {
@@ -53,13 +52,13 @@ func TestWalletBalance(t *testing.T) {
 	}{
 		{
 			name:  "Correct address format",
-			input: "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
+			input: "000200135c81a9feb516c2c776b99d2c30de84c8",
 			w: &Wallet{
 				outFileName: "outfile",
 				pbData: &protos.Wallet{
 					Version: "1",
 					XmssInfo: []*protos.XMSSInfo{&protos.XMSSInfo{
-						Address:  "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
+						Address:  "000200135c81a9feb516c2c776b99d2c30de84c8",
 						HexSeed:  "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e00167939cb",
 						Mnemonic: "aback bunny flood taxi also blew harp vein dough vase onset cache isle found shrimp sparse affect sham leak ramp amidst bronze shirt nylon maid pushy heil span many brute broke accuse laity over",
 					}},
@@ -70,14 +69,14 @@ func TestWalletBalance(t *testing.T) {
 		},
 		{
 			name:  "Incorrect address format",
-			input: "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
+			input: "000200135c81a9feb516c2c776b99d2c30de84c8",
 			w: &Wallet{
 				outFileName: "outfile",
 				pbData: &protos.Wallet{
 					Version: "1",
 					XmssInfo: []*protos.XMSSInfo{
 						&protos.XMSSInfo{
-							Address:  "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
+							Address:  "000200135c81a9feb516c2c776b99d2c30de84c8",
 							HexSeed:  "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e0016793",
 							Mnemonic: "aback bunny flood taxi also blew harp vein dough vase onset cache isle found shrimp sparse affect sham leak ramp amidst bronze shirt nylon maid pushy heil span many brute broke accuse laity over",
 						},
@@ -102,7 +101,6 @@ func TestWalletBalance(t *testing.T) {
 	}
 }
 
-
 func TestXmssByIndex(t *testing.T) {
 	outFileName := "wallet_new.txt"
 	wallet := NewWallet(outFileName)
@@ -114,7 +112,7 @@ func TestXmssByIndex(t *testing.T) {
 
 	address := xmss.GetAddress()
 	decoded := hex.EncodeToString(address[:])
-	if decoded!= wallet.pbData.XmssInfo[0].Address {
+	if decoded != wallet.pbData.XmssInfo[0].Address {
 		t.Errorf("expected address (%s), got (%s)", wallet.pbData.XmssInfo[0].Address, decoded)
 	}
 }
