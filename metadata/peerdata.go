@@ -2,15 +2,16 @@ package metadata
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
+	"path"
+	"sync"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/protos"
 	"google.golang.org/protobuf/encoding/protojson"
-	"io/ioutil"
-	"os"
-	"path"
-	"sync"
 )
 
 type PeerData struct {
@@ -60,9 +61,9 @@ func (p *PeerData) PeerList() []string {
 
 func (p *PeerData) IsPeerInList(multiAddr string) bool {
 	/*
-	Check if Peer IP and Port is already added either
-	into connected peer list or disconnected peer list
-	 */
+		Check if Peer IP and Port is already added either
+		into connected peer list or disconnected peer list
+	*/
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	peerInfo := NewPeerInfo(multiAddr, 0)
@@ -125,7 +126,7 @@ func (p *PeerData) AddDisconnectedPeers(multiAddr string) error {
 	index := p.findIndex(peerInfo, p.disconnectedPeers)
 	if index == -1 {
 		p.disconnectedPeers = append([]*PeerInfo{peerInfo},
-		p.disconnectedPeers...)
+			p.disconnectedPeers...)
 	}
 
 	p.removeConnectedPeers(peerInfo)
@@ -226,12 +227,12 @@ func (p *PeerData) Load() error {
 func NewPeerData() (*PeerData, error) {
 	p := &PeerData{
 		pbData: &protos.PeerData{
-			ConnectedPeers: make([]*protos.PeerInfo, 0),
+			ConnectedPeers:    make([]*protos.PeerInfo, 0),
 			DisconnectedPeers: make([]*protos.PeerInfo, 0),
 		},
-		connectedPeers: make([]*PeerInfo, 0),
+		connectedPeers:    make([]*PeerInfo, 0),
 		disconnectedPeers: make([]*PeerInfo, 0),
-		bootstrapNodes: make(map[string]bool),
+		bootstrapNodes:    make(map[string]bool),
 	}
 	for _, ipPort := range config.GetUserConfig().Node.PeerList {
 		p.bootstrapNodes[ipPort] = true

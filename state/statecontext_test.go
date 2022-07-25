@@ -1,27 +1,23 @@
 package state
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
-	// "reflect"
-	"crypto/sha256"
-	"encoding/hex"
-
 	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/go-qrllib/xmss"
+	"github.com/theQRL/zond/address"
 	"github.com/theQRL/zond/config"
 	mockdb "github.com/theQRL/zond/db/mock"
-	"go.etcd.io/bbolt"
-
-	// "github.com/theQRL/zond/protos"
-	"github.com/theQRL/zond/address"
 	"github.com/theQRL/zond/metadata"
 	"github.com/theQRL/zond/misc"
+	"go.etcd.io/bbolt"
 )
 
 func TestProcessValidatorStakeAmount(t *testing.T) {
@@ -1585,17 +1581,6 @@ func TestCommit(t *testing.T) {
 					}
 					return nil
 				}
-				// for i := len(tc.blockMetaDataPathArray) - 1; i >= 0; i-- {
-				// 	bm := tc.blockMetaDataPathArray[i]
-				// 	blockBucket := tx.Bucket(metadata.GetBlockBucketName(bm.HeaderHash()))
-				// 	if blockBucket == nil {
-				// 		_, err := tx.CreateBucket(metadata.GetBlockBucketName(bm.HeaderHash()))
-				// 		if err != nil {
-				// 			return fmt.Errorf("error to create bucket: %s", err)
-				// 		}
-				// 		return nil
-				// 	}
-				// }
 				return nil
 			})
 			if err != nil {

@@ -6,3 +6,8 @@ wallet/wallet_new.txt
 zond
 state/testdb2.txt
 state/testdb.txt
+metadata/testdb.txt
+metadata/testdb2.txt
+metadata/testdb3.txt
+metadata/testdb4.txt
+metadata/testdb5.txt
