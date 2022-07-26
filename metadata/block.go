@@ -3,6 +3,7 @@ package metadata
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/config"
@@ -70,19 +71,20 @@ func (bm *BlockMetaData) Commit(b *bbolt.Bucket) error {
 
 func NewBlockMetaData(parentHeaderHash []byte, headerHash []byte,
 	slotNumber uint64, totalStakeAmount []byte) *BlockMetaData {
-	pbData := &protos.BlockMetaData {
+	pbData := &protos.BlockMetaData{
 		ParentHeaderHash: parentHeaderHash,
-		HeaderHash: headerHash,
-		SlotNumber: slotNumber,
+		HeaderHash:       headerHash,
+		SlotNumber:       slotNumber,
 		TotalStakeAmount: totalStakeAmount,
 	}
-	return &BlockMetaData {
+	return &BlockMetaData{
 		pbData: pbData,
 	}
 }
 
 func GetBlockMetaData(d db.DB, headerHash []byte) (*BlockMetaData, error) {
 	key := GetBlockMetaDataKey(headerHash)
+
 	data, err := d.Get(key)
 	if err != nil {
 		log.Error("Error loading BlockMetaData for key ", string(key), err)

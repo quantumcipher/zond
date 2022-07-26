@@ -27,37 +27,44 @@ func TestNewEpochMetaData(t *testing.T) {
 	}
 }
 
-// func TestGetEpochMetaData(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
+func TestGetEpochMetaData(t *testing.T) {
+	ctrl := gomock.NewController(t)
 
-// 	epoch := uint64(1)
-// 	currentBlockSlotNumber := uint64(1)
-// 	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-// 	headerHash := sha256.New().Sum([]byte("headerHash"))
-// 	slotNumber := uint64(178)
-// 	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"))
-// 	blockMetadataSerialized, _ := blockMetadata.Serialize()
+	epoch := uint64(1)
+	currentBlockSlotNumber := uint64(178)
+	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	headerHash := sha256.New().Sum([]byte("headerHash"))
+	slotNumber := uint64(178)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"))
+	blockMetadataSerialized, _ := blockMetadata.Serialize()
 
-// 	epochMetadata := NewEpochMetaData(epoch, parentHeaderHash, nil)
-// 	epochMetadataSerialized, _ := epochMetadata.Serialize()
+	slotNumber2 := uint64(50)
+	blockMetadata2 := NewBlockMetaData(nil, parentHeaderHash, slotNumber2, []byte("100"))
+	blockMetadataSerialized2, _ := blockMetadata2.Serialize()
 
-// 	store := mockdb.NewMockDB(ctrl)
-// 	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(headerHash))).Return(blockMetadataSerialized, nil).AnyTimes()
-// 	store.EXPECT().Get(gomock.Eq(GetEpochMetaDataKey(epoch, parentHeaderHash))).Return(epochMetadataSerialized, nil).AnyTimes()
+	epochMetadata := NewEpochMetaData(epoch, parentHeaderHash, nil)
+	epochMetadataSerialized, _ := epochMetadata.Serialize()
 
-// 	output, err := GetEpochMetaData(store, currentBlockSlotNumber, parentHeaderHash)
-// 	if err != nil {
-// 		t.Errorf("got unexpected error (%v)", err)
-// 	}
+	fmt.Printf("blockheader key is %s\n", GetBlockMetaDataKey(headerHash))
 
-// 	if string(output.PrevSlotLastBlockHeaderHash()) != string(headerHash) {
-// 		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(headerHash), string(output.PrevSlotLastBlockHeaderHash()))
-// 	}
+	store := mockdb.NewMockDB(ctrl)
+	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(headerHash))).Return(blockMetadataSerialized, nil).AnyTimes()
+	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(parentHeaderHash))).Return(blockMetadataSerialized2, nil).AnyTimes()
+	store.EXPECT().Get(gomock.Eq(GetEpochMetaDataKey(epoch, parentHeaderHash))).Return(epochMetadataSerialized, nil).AnyTimes()
 
-// 	if output.Epoch() != epoch {
-// 		t.Errorf("epoch not set correctly, expected (%v) got (%v)", epoch, output.Epoch())
-// 	}
-// }
+	output, err := GetEpochMetaData(store, currentBlockSlotNumber, parentHeaderHash)
+	if err != nil {
+		t.Errorf("got unexpected error (%v)", err)
+	}
+
+	if string(output.PrevSlotLastBlockHeaderHash()) != string(parentHeaderHash) {
+		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(parentHeaderHash), string(output.PrevSlotLastBlockHeaderHash()))
+	}
+
+	if output.Epoch() != epoch {
+		t.Errorf("epoch not set correctly, expected (%v) got (%v)", epoch, output.Epoch())
+	}
+}
 
 func TestAllotSlots(t *testing.T) {
 	epoch := uint64(1)
