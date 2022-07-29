@@ -6,11 +6,12 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"reflect"
+
 	"github.com/theQRL/go-qrllib/xmss"
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
-	"reflect"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -73,19 +74,19 @@ func (tx *Transfer) validateData(stateContext *state.StateContext) bool {
 	// TODO: Common check that the length of all bytes field such as addressfrom, slavepks, tx hash are of even length
 	for _, amount := range tx.Amounts() {
 		if amount < 0 {
-			log.Warn("Transfer [%s] Invalid Amount = %d", hex.EncodeToString(txHash), amount)
+			log.Warnf("Transfer [%s] Invalid Amount = %d", hex.EncodeToString(txHash), amount)
 			return false
 		}
 	}
 
 	if tx.Fee() < 0 {
-		log.Warn("Transfer [%s] Invalid Fee = %d", hex.EncodeToString(txHash), tx.Fee)
+		log.Warnf("Transfer [%s] Invalid Fee = %d", hex.EncodeToString(txHash), tx.Fee())
 		return false
 	}
 
 	addressState, err := stateContext.GetAddressState(hex.EncodeToString(tx.AddrFrom()))
 	if err != nil {
-		log.Warn("Transfer [%s] Address %s missing into state context", tx.AddrFrom())
+		log.Warnf("Transfer [%s] Address missing into state context", tx.AddrFrom())
 		return false
 	}
 
@@ -114,20 +115,20 @@ func (tx *Transfer) validateData(stateContext *state.StateContext) bool {
 
 	if len(tx.AddrsTo()) != len(tx.Amounts()) {
 		log.Warn("[Transfer] Mismatch number of addresses to & amounts")
-		log.Warn(">> Length of addrsTo %s", len(tx.AddrsTo()))
-		log.Warn(">> Length of amounts %s", len(tx.Amounts()))
+		log.Warnf(">> Length of addrsTo %d", len(tx.AddrsTo()))
+		log.Warnf(">> Length of amounts %d", len(tx.Amounts()))
 		return false
 	}
 
 	// TODO: Move to some common validation
 	if !xmss.IsValidXMSSAddress(misc.UnSizedXMSSAddressToSizedXMSSAddress(tx.AddrFrom())) {
-		log.Warn("[Transfer] Invalid address addr_from: %s", tx.AddrFrom())
+		log.Warnf("[Transfer] Invalid address addr_from: %s", tx.AddrFrom())
 		return false
 	}
 
 	for _, addrTo := range tx.AddrsTo() {
 		if !xmss.IsValidXMSSAddress(misc.UnSizedXMSSAddressToSizedXMSSAddress(addrTo)) {
-			log.Warn("[Transfer] Invalid address addr_to: %s", tx.AddrsTo())
+			log.Warnf("[Transfer] Invalid address addr_to: %s", tx.AddrsTo())
 			return false
 		}
 	}
@@ -135,19 +136,19 @@ func (tx *Transfer) validateData(stateContext *state.StateContext) bool {
 	slavePksLen := len(tx.SlavePKs())
 	// TODO: Move 100 to the config
 	if slavePksLen > 100 {
-		log.Warn("Slave Public Keys length beyond length limit: %d", slavePksLen)
+		log.Warnf("Slave Public Keys length beyond length limit: %d", slavePksLen)
 		return false
 	}
 
 	for _, slavePK := range tx.SlavePKs() {
 		binAddress := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK(slavePK))
 		if !xmss.IsValidXMSSAddress(binAddress) {
-			log.Warn("Slave public key %s is invalid", hex.EncodeToString(slavePK))
+			log.Warnf("Slave public key %s is invalid", hex.EncodeToString(slavePK))
 			return false
 		}
 		slaveState := stateContext.GetSlaveState(hex.EncodeToString(tx.AddrFrom()), hex.EncodeToString(slavePK))
 		if slaveState != nil {
-			log.Warn("Slave public key %s already exist for address %s", slavePK, tx.AddrFrom())
+			log.Warnf("Slave public key %s already exist for address %s", slavePK, tx.AddrFrom())
 			return false
 		}
 	}
@@ -155,7 +156,7 @@ func (tx *Transfer) validateData(stateContext *state.StateContext) bool {
 	msgLen := len(tx.Message())
 	// TODO: Move 100 to the config
 	if msgLen > 100 {
-		log.Warn("Message length beyond message length limit: %d", msgLen)
+		log.Warnf("Message length beyond message length limit: %d", msgLen)
 		return false
 	}
 
@@ -211,7 +212,9 @@ func (tx *Transfer) ApplyStateChanges(stateContext *state.StateContext) error {
 		return err
 	}
 
-	addrState, err := stateContext.GetAddressState(hex.EncodeToString(tx.AddrFrom()))
+	addrFrom := tx.AddrFrom()
+
+	addrState, err := stateContext.GetAddressState(hex.EncodeToString(addrFrom))
 	if err != nil {
 		return err
 	}

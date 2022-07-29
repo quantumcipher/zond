@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"reflect"
+
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/go-qrllib/xmss"
@@ -13,7 +15,6 @@ import (
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
 	"google.golang.org/protobuf/encoding/protojson"
-	"reflect"
 )
 
 type CoreTransaction interface {
@@ -262,7 +263,10 @@ func (tx *Transaction) ValidateSlave(stateContext *state.StateContext) bool {
 		return false
 	}
 
-	slaveMetaData := stateContext.GetSlaveState(hex.EncodeToString(masterAddr), hex.EncodeToString(slavePK))
+	encodedMasterAddress := hex.EncodeToString(masterAddr)
+	encodedSlavePK := hex.EncodeToString(slavePK)
+
+	slaveMetaData := stateContext.GetSlaveState(encodedMasterAddress, encodedSlavePK)
 	if slaveMetaData == nil {
 		return false
 	}

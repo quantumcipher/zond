@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"reflect"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/zond/chain/rewards"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
-	"reflect"
 )
 
 type CoinBase struct {
@@ -77,7 +78,7 @@ func (tx *CoinBase) validateData(stateContext *state.StateContext) bool {
 	coinBaseAddress := config.GetDevConfig().Genesis.CoinBaseAddress
 	addressState, err := stateContext.GetAddressState(hex.EncodeToString(coinBaseAddress))
 	if err != nil {
-		log.Warn("CoinBase [%s] Address %s missing into state context", coinBaseAddress)
+		log.Warnf("CoinBase [%s] Address missing into state context", coinBaseAddress)
 		return false
 	}
 

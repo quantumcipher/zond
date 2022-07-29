@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"reflect"
+
 	"github.com/theQRL/go-qrllib/xmss"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/metadata"
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
-	"reflect"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -107,7 +108,7 @@ func (tx *Stake) validateData(stateContext *state.StateContext) bool {
 	lenDilithiumPKs := len(tx.DilithiumPKs())
 	// TODO: Move 100 into config
 	if lenDilithiumPKs > 100 {
-		log.Warn("Number of Dilithium Public Keys beyond limit [%s] Length = %d",
+		log.Warnf("Number of Dilithium Public Keys beyond limit [%s] Length = %d",
 			hex.EncodeToString(txHash), lenDilithiumPKs)
 		return false
 	}
@@ -121,7 +122,7 @@ func (tx *Stake) validateData(stateContext *state.StateContext) bool {
 				return false
 			}
 			if dilithiumMetaData.Stake() == tx.Stake() {
-				log.Warn("Dilithium Public Key %s has already stake status %s",
+				log.Warnf("Dilithium Public Key %s has already stake status %d",
 					strDilithiumPK, lenDilithiumPKs)
 				return false
 			}
@@ -129,7 +130,7 @@ func (tx *Stake) validateData(stateContext *state.StateContext) bool {
 	}
 
 	if !xmss.IsValidXMSSAddress(misc.UnSizedXMSSAddressToSizedXMSSAddress(tx.AddrFrom())) {
-		log.Warn("[Stake] Invalid address addr_from: %s", tx.AddrFrom())
+		log.Warnf("[Stake] Invalid address addr_from: %s", tx.AddrFrom())
 		return false
 	}
 
