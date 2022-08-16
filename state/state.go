@@ -5,10 +5,10 @@ import (
 )
 
 type State struct {
-	db *db.DB
+	db db.DB
 }
 
-func (s *State) DB() *db.DB {
+func (s *State) DB() db.DB {
 	return s.db
 }
 

@@ -25,7 +25,7 @@ type POS struct {
 	config *config.Config
 	srv    *p2p.Server
 	chain  *chain.Chain
-	db     *db.DB
+	db     db.DB
 
 	/*
 		validators stores the dilithium based on seed available
@@ -440,7 +440,7 @@ func (p *POS) Stop() {
 	return
 }
 
-func NewPOS(srv *p2p.Server, chain *chain.Chain, db *db.DB) *POS {
+func NewPOS(srv *p2p.Server, chain *chain.Chain, db db.DB) *POS {
 	pos := &POS{
 		config:     config.GetConfig(),
 		srv:        srv,

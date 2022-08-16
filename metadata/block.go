@@ -3,6 +3,7 @@ package metadata
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/common"
@@ -93,8 +94,9 @@ func NewBlockMetaData(parentHeaderHash common.Hash, headerHash common.Hash,
 	}
 }
 
-func GetBlockMetaData(d *db.DB, headerHash common.Hash) (*BlockMetaData, error) {
+func GetBlockMetaData(d db.DB, headerHash common.Hash) (*BlockMetaData, error) {
 	key := GetBlockMetaDataKey(headerHash)
+
 	data, err := d.Get(key)
 	if err != nil {
 		log.Error("Error loading BlockMetaData for key ", string(key), err)

@@ -93,7 +93,7 @@ func NewEpochBlockHashes(epoch uint64) *EpochBlockHashes {
 	}
 }
 
-func GetEpochBlockHashes(d *db.DB,
+func GetEpochBlockHashes(d db.DB,
 	epoch uint64) (*EpochBlockHashes, error) {
 	key := GetEpochBlockHashesKey(epoch)
 	data, err := d.Get(key)

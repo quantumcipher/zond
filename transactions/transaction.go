@@ -261,6 +261,32 @@ func (tx *Transaction) Validate(stateContext *state.StateContext) bool {
 
 func (tx *Transaction) AsMessage(baseFee *big.Int) (types.Message, error) {
 	panic("Not Implemented")
+
+func (tx *Transaction) ValidateSlave(stateContext *state.StateContext) bool {
+	masterAddr := tx.MasterAddr()
+	slavePK := tx.PK()
+	if len(masterAddr) == 0 {
+		return true
+	}
+	addrFromPK := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK(tx.PK()))
+
+	if reflect.DeepEqual(tx.MasterAddr(), addrFromPK) {
+		log.Warn("Matching master_addr field and address from PK")
+		return false
+	}
+
+	encodedMasterAddress := hex.EncodeToString(masterAddr)
+	encodedSlavePK := hex.EncodeToString(slavePK)
+
+	slaveMetaData := stateContext.GetSlaveState(encodedMasterAddress, encodedSlavePK)
+	if slaveMetaData == nil {
+		return false
+	}
+	if len(slaveMetaData.TxHash()) == 0 {
+		return false
+	}
+
+	return true
 }
 
 func (tx *Transaction) ValidateExtendedCoinbase(blockNumber uint64) bool {

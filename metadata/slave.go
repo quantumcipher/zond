@@ -54,7 +54,7 @@ func NewSlaveMetaData(txHash []byte, address []byte, slavePK []byte) *SlaveMetaD
 	}
 }
 
-func GetSlaveMetaData(db *db.DB, address []byte, slavePK []byte,
+func GetSlaveMetaData(db db.DB, address []byte, slavePK []byte,
 	headerHash common.Hash, finalizedHeaderHash common.Hash) (*SlaveMetaData, error) {
 	key := GetSlaveMetaDataKey(address, slavePK)
 

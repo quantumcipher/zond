@@ -4,18 +4,27 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"reflect"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/db"
 	"github.com/theQRL/zond/metadata"
 	"go.etcd.io/bbolt"
-	"math/big"
-	"reflect"
 )
 
 type StateContext struct {
+<<<<<<< HEAD
 	db *db.DB
+=======
+	db             db.DB
+	addressesState map[string]*address.AddressState
+	dilithiumState map[string]*metadata.DilithiumMetaData
+	slaveState     map[string]*metadata.SlaveMetaData
+	otsIndexState  map[string]*metadata.OTSIndexMetaData
+>>>>>>> qcfork/unit-test
 
 	slotNumber                   uint64
 	blockProposer                []byte
@@ -75,12 +84,22 @@ func (s *StateContext) ValidatorsFlag() map[string]bool {
 	return s.validatorsFlag
 }
 
+<<<<<<< HEAD
 func (s *StateContext) processValidatorStakeAmount(dilithiumPK []byte, stakeBalance *big.Int) error {
 	//addr := dilithium.GetDilithiumAddressFromPK(misc.UnSizedDilithiumPKToSizedPK(dilithiumPK))
 	//stakeBalance := s.db2.GetStakeBalance(addr)
 
 	if stakeBalance.Uint64() == 0 {
 		return errors.New(fmt.Sprintf("Invalid stake balance %d for pk %s", stakeBalance, dilithiumPK))
+=======
+func (s *StateContext) processValidatorStakeAmount(dilithiumPK []byte) error {
+	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(dilithiumPK))
+	slotLeaderDilithiumMetaData, ok := s.dilithiumState[strKey]
+
+	hexPK := hex.EncodeToString(dilithiumPK)
+	if !ok {
+		return fmt.Errorf("validator dilithium state not found for %s", hexPK)
+>>>>>>> qcfork/unit-test
 	}
 	s.currentBlockTotalStakeAmount = s.currentBlockTotalStakeAmount.Add(s.currentBlockTotalStakeAmount, stakeBalance)
 	return nil
@@ -129,12 +148,223 @@ func (s *StateContext) ProcessBlockProposerFlag(blockProposerDilithiumPK []byte,
 	return nil
 }
 
+<<<<<<< HEAD
 func (s *StateContext) PrepareValidators(dilithiumPK []byte) error {
 	s.validatorsFlag[hex.EncodeToString(dilithiumPK)] = false
 	return nil
 }
 
 func (s *StateContext) Commit(blockStorageKey []byte, bytesBlock []byte, trieRoot common.Hash, isFinalizedState bool) error {
+=======
+func (s *StateContext) PrepareAddressState(addr string) error {
+	binAddr, err := hex.DecodeString(addr)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(address.GetAddressStateKey(binAddr))
+	_, ok := s.addressesState[strKey]
+	if ok {
+		return nil
+	}
+
+	addressState, err := address.GetAddressState(s.db, binAddr,
+		s.parentBlockHeaderHash, s.mainChainMetaData.FinalizedBlockHeaderHash())
+	if addressState == nil {
+		return err
+	}
+	s.addressesState[strKey] = addressState
+
+	return err
+}
+
+func (s *StateContext) GetAddressState(addr string) (*address.AddressState, error) {
+	binAddr, err := hex.DecodeString(addr)
+	if err != nil {
+		return nil, err
+	}
+	strKey := hex.EncodeToString(address.GetAddressStateKey(binAddr))
+	addressState, ok := s.addressesState[strKey]
+	if !ok {
+		return nil, fmt.Errorf("address %s not found in addressesState", addr)
+	}
+	return addressState, nil
+}
+
+func (s *StateContext) GetAddressStateByPK(pk []byte) (*address.AddressState, error) {
+	address := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK(pk))
+	addr := hex.EncodeToString(address[:])
+	return s.GetAddressState(addr)
+}
+
+func (s *StateContext) PrepareValidatorsToXMSSAddress(dilithiumPK []byte) error {
+	xmssAddress, err := metadata.GetXMSSAddressFromDilithiumPK(s.db,
+		dilithiumPK, s.parentBlockHeaderHash, s.finalizedHeaderHash)
+	if err != nil {
+		log.Error("Failed to PrepareValidatorsToXMSSAddress for ",
+			hex.EncodeToString(dilithiumPK))
+		return err
+	}
+	s.validatorsToXMSSAddress[hex.EncodeToString(dilithiumPK)] = xmssAddress
+	return nil
+}
+
+func (s *StateContext) GetXMSSAddressByDilithiumPK(dilithiumPK []byte) []byte {
+	return s.validatorsToXMSSAddress[hex.EncodeToString(dilithiumPK)]
+}
+
+func (s *StateContext) PrepareDilithiumMetaData(dilithiumPK string) error {
+	binDilithiumPK, err := hex.DecodeString(dilithiumPK)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(binDilithiumPK))
+	_, ok := s.dilithiumState[strKey]
+	if ok {
+		return nil
+	}
+
+	dilithiumMetaData, err := metadata.GetDilithiumMetaData(s.db, binDilithiumPK,
+		s.parentBlockHeaderHash, s.mainChainMetaData.FinalizedBlockHeaderHash())
+	if err != nil {
+		return err
+	}
+	s.dilithiumState[strKey] = dilithiumMetaData
+	return err
+}
+
+func (s *StateContext) AddDilithiumMetaData(dilithiumPK string, dilithiumMetaData *metadata.DilithiumMetaData) error {
+	binDilithiumPK, err := hex.DecodeString(dilithiumPK)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(binDilithiumPK))
+	_, ok := s.dilithiumState[strKey]
+	if ok {
+		return errors.New("dilithiumPK already exists")
+	}
+	s.dilithiumState[strKey] = dilithiumMetaData
+	return nil
+}
+
+func (s *StateContext) GetDilithiumState(dilithiumPK string) *metadata.DilithiumMetaData {
+	binDilithiumPk, err := hex.DecodeString(dilithiumPK)
+	if err != nil {
+		log.Error("Error decoding dilithium PK")
+		return nil
+	}
+	strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(binDilithiumPk))
+	dilithiumState := s.dilithiumState[strKey]
+	return dilithiumState
+}
+
+func (s *StateContext) PrepareSlaveMetaData(masterAddr string, slavePK string) error {
+	binMasterAddress, err := hex.DecodeString(masterAddr)
+	if err != nil {
+		return err
+	}
+	binSlavePk, err := hex.DecodeString(slavePK)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(metadata.GetSlaveMetaDataKey(binMasterAddress, binSlavePk))
+	_, ok := s.slaveState[strKey]
+	if ok {
+		return nil
+	}
+
+	slaveMetaData, err := metadata.GetSlaveMetaData(s.db, binMasterAddress, binSlavePk,
+		s.parentBlockHeaderHash, s.mainChainMetaData.FinalizedBlockHeaderHash())
+	if slaveMetaData == nil {
+		return err
+	}
+	s.slaveState[strKey] = slaveMetaData
+	return err
+}
+
+func (s *StateContext) AddSlaveMetaData(masterAddr string, slavePK string,
+	slaveMetaData *metadata.SlaveMetaData) error {
+	binMasterAddress, err := hex.DecodeString(masterAddr)
+	if err != nil {
+		return err
+	}
+	binSlavePk, err := hex.DecodeString(slavePK)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(metadata.GetSlaveMetaDataKey(binMasterAddress, binSlavePk))
+	_, ok := s.slaveState[strKey]
+	if ok {
+		return errors.New("SlaveMetaData already exists")
+	}
+	s.slaveState[strKey] = slaveMetaData
+	return nil
+}
+
+func (s *StateContext) GetSlaveState(masterAddr string, slavePK string) *metadata.SlaveMetaData {
+	binMasterAddress, err := hex.DecodeString(masterAddr)
+	if err != nil {
+		log.Error("Error decoding masterAddr ", err.Error())
+		return nil
+	}
+	binSlavePk, err := hex.DecodeString(slavePK)
+	if err != nil {
+		log.Error("Error decoding slavePK ", err.Error())
+		return nil
+	}
+	strKey := hex.EncodeToString(metadata.GetSlaveMetaDataKey(binMasterAddress, binSlavePk))
+	slaveMetaData, _ := s.slaveState[strKey]
+	return slaveMetaData
+}
+
+func (s *StateContext) PrepareOTSIndexMetaData(address string, otsIndex uint64) error {
+	binAddress, err := hex.DecodeString(address)
+	if err != nil {
+		return err
+	}
+	key := metadata.GetOTSIndexMetaDataKeyByOTSIndex(binAddress, otsIndex)
+	strKey := hex.EncodeToString(key)
+	_, ok := s.otsIndexState[strKey]
+	if ok {
+		return nil
+	}
+
+	otsIndexMetaData, err := metadata.GetOTSIndexMetaData(s.db, binAddress, otsIndex,
+		s.parentBlockHeaderHash, s.mainChainMetaData.FinalizedBlockHeaderHash())
+	if otsIndexMetaData == nil {
+		return err
+	}
+	s.otsIndexState[strKey] = otsIndexMetaData
+	return err
+}
+
+func (s *StateContext) AddOTSIndexMetaData(address string, otsIndex uint64,
+	otsIndexMetaData *metadata.OTSIndexMetaData) error {
+	binAddress, err := hex.DecodeString(address)
+	if err != nil {
+		return err
+	}
+	strKey := hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(binAddress, otsIndex))
+	_, ok := s.otsIndexState[strKey]
+	if ok {
+		return errors.New("OTSIndexMetaData already exists")
+	}
+	s.otsIndexState[strKey] = otsIndexMetaData
+	return nil
+}
+
+func (s *StateContext) GetOTSIndexState(address string, otsIndex uint64) *metadata.OTSIndexMetaData {
+	binAddress, err := hex.DecodeString(address)
+	if err != nil {
+		log.Error("Error decoding address ", err.Error())
+		return nil
+	}
+	strKey := hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(binAddress, otsIndex))
+	otsIndexMetaData, _ := s.otsIndexState[strKey]
+	return otsIndexMetaData
+}
+
+func (s *StateContext) Commit(blockStorageKey []byte, bytesBlock []byte, isFinalizedState bool) error {
+>>>>>>> qcfork/unit-test
 	var parentBlockMetaData *metadata.BlockMetaData
 	var err error
 	totalStakeAmount := big.NewInt(0)
@@ -185,6 +415,7 @@ func (s *StateContext) Commit(blockStorageKey []byte, bytesBlock []byte, trieRoo
 			log.Error("[Commit] Failed to commit BlockMetaData")
 			return err
 		}
+		fmt.Print("reached here")
 		err = s.epochBlockHashes.AddHeaderHashBySlotNumber(s.blockHeaderHash, s.slotNumber)
 		if err != nil {
 			log.Error("[Commit] Failed to Add Hash into EpochBlockHashes")
@@ -261,7 +492,6 @@ func (s *StateContext) Finalize(blockMetaDataPathForFinalization []*metadata.Blo
 			hex.EncodeToString(pHash[:]))
 		return err
 	}
-
 	return s.db.DB().Update(func(tx *bbolt.Tx) error {
 		var err error
 		mainBucket := tx.Bucket([]byte("DB"))
@@ -308,10 +538,17 @@ func (s *StateContext) Finalize(blockMetaDataPathForFinalization []*metadata.Blo
 	})
 }
 
+<<<<<<< HEAD
 func NewStateContext(db *db.DB, slotNumber uint64,
 	blockProposer []byte, finalizedHeaderHash common.Hash,
 	parentBlockHeaderHash common.Hash, blockHeaderHash common.Hash,
 	partialBlockSigningHash common.Hash, blockSigningHash common.Hash,
+=======
+func NewStateContext(db db.DB, slotNumber uint64,
+	blockProposer []byte, finalizedHeaderHash []byte,
+	parentBlockHeaderHash []byte, blockHeaderHash []byte,
+	partialBlockSigningHash []byte, blockSigningHash []byte,
+>>>>>>> qcfork/unit-test
 	epochMetaData *metadata.EpochMetaData) (*StateContext, error) {
 
 	mainChainMetaData, err := metadata.GetMainChainMetaData(db)
