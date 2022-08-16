@@ -7,14 +7,9 @@ require (
 	github.com/beevik/ntp v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/ghodss/yaml v1.0.0
-<<<<<<< HEAD
 	github.com/go-stack/stack v1.8.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
-=======
-	github.com/golang/mock v1.6.0
-	github.com/golang/protobuf v1.4.2
->>>>>>> qcfork/unit-test
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/golang-lru v0.5.4
