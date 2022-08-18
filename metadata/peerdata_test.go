@@ -1,12 +1,32 @@
 package metadata
 
 import (
+	"os"
 	"testing"
 
+	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/protos"
 )
 
+func CreateDirectoryIfNotExists(dir string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func TestLoad(t *testing.T) {
+	userConfig := config.GetUserConfig()
+
+	err := CreateDirectoryIfNotExists(userConfig.DataDir())
+	if err != nil {
+		t.Error("Error creating data directory ", err.Error())
+	}
+	defer os.Remove(userConfig.BaseDir)
 	peerData := &PeerData{
 		pbData: &protos.PeerData{
 			ConnectedPeers:    make([]*protos.PeerInfo, 0),
@@ -17,7 +37,7 @@ func TestLoad(t *testing.T) {
 		bootstrapNodes:    make(map[string]bool),
 	}
 
-	err := peerData.Load()
+	err = peerData.Load()
 
 	if err != nil {
 		t.Error("got unexpected error while loading peerdata", err)
@@ -25,6 +45,13 @@ func TestLoad(t *testing.T) {
 }
 
 func TestSave(t *testing.T) {
+	userConfig := config.GetUserConfig()
+
+	err := CreateDirectoryIfNotExists(userConfig.DataDir())
+	if err != nil {
+		t.Error("Error creating data directory ", err.Error())
+	}
+	defer os.Remove(userConfig.BaseDir)
 	peerData := &PeerData{
 		pbData: &protos.PeerData{
 			ConnectedPeers:    make([]*protos.PeerInfo, 0),
@@ -35,13 +62,20 @@ func TestSave(t *testing.T) {
 		bootstrapNodes:    make(map[string]bool),
 	}
 
-	err := peerData.Save()
+	err = peerData.Save()
 	if err != nil {
 		t.Error("got unexpected error while saving peerdata")
 	}
 }
 
 func TestAddConnectedPeers(t *testing.T) {
+	userConfig := config.GetUserConfig()
+
+	err := CreateDirectoryIfNotExists(userConfig.DataDir())
+	if err != nil {
+		t.Error("Error creating data directory ", err.Error())
+	}
+	defer os.Remove(userConfig.BaseDir)
 	peerData := &PeerData{
 		pbData: &protos.PeerData{
 			ConnectedPeers:    make([]*protos.PeerInfo, 0),
@@ -65,6 +99,13 @@ func TestAddConnectedPeers(t *testing.T) {
 }
 
 func TestAddDisconnectedPeers(t *testing.T) {
+	userConfig := config.GetUserConfig()
+
+	err := CreateDirectoryIfNotExists(userConfig.DataDir())
+	if err != nil {
+		t.Error("Error creating data directory ", err.Error())
+	}
+	defer os.Remove(userConfig.BaseDir)
 	peerData := &PeerData{
 		pbData: &protos.PeerData{
 			ConnectedPeers:    make([]*protos.PeerInfo, 0),
@@ -88,6 +129,13 @@ func TestAddDisconnectedPeers(t *testing.T) {
 }
 
 func TestRemovePeer(t *testing.T) {
+	userConfig := config.GetUserConfig()
+
+	err := CreateDirectoryIfNotExists(userConfig.DataDir())
+	if err != nil {
+		t.Error("Error creating data directory ", err.Error())
+	}
+	defer os.Remove(userConfig.BaseDir)
 	peerData := &PeerData{
 		pbData: &protos.PeerData{
 			ConnectedPeers:    make([]*protos.PeerInfo, 0),
@@ -100,7 +148,7 @@ func TestRemovePeer(t *testing.T) {
 
 	peerData.AddConnectedPeers("peerAddress1/peerAddress2/peerAddress3/peerAddress4/peerAddress5/peerAddress6/peerAddress7")
 
-	err := peerData.RemovePeer("peerAddress1/peerAddress2/peerAddress3/peerAddress4/peerAddress5/peerAddress6/peerAddress7")
+	err = peerData.RemovePeer("peerAddress1/peerAddress2/peerAddress3/peerAddress4/peerAddress5/peerAddress6/peerAddress7")
 	if err != nil {
 		t.Error("unexpected error while removing peer", err)
 	}
