@@ -2,13 +2,13 @@ package metadata
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/xmss"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"github.com/theQRL/zond/misc"
 	"go.etcd.io/bbolt"
@@ -21,7 +21,7 @@ func TestNewSlaveMetaData(t *testing.T) {
 
 	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
 	validatorXmssPK := validatorXmss.GetPK()
-	address := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	address := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 
 	slaveMetadata := NewSlaveMetaData(transactionHash, address[:], slaveXmssPK[:])
 
@@ -39,21 +39,21 @@ func TestGetSlaveMetaData(t *testing.T) {
 
 	slaveXmss := xmss.NewXMSSFromHeight(4, 0)
 	slaveXmssPK := slaveXmss.GetPK()
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
+	transactionHash := common.Hash(sha256.Sum256([]byte("transactionHash")))
 	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
 	validatorXmssPK := validatorXmss.GetPK()
-	address := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	address := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 
-	slaveMetadata := NewSlaveMetaData(transactionHash, address[:], slaveXmssPK[:])
+	slaveMetadata := NewSlaveMetaData(transactionHash.Bytes(), address[:], slaveXmssPK[:])
 	slaveMetadataSerialized, _ := slaveMetadata.Serialize()
 
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	blockHeaderHash := sha256.New().Sum([]byte("blockHeaderHash"))
+	finalizedHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
+	blockHeaderHash := common.Hash(sha256.Sum256([]byte("blockHeaderHash")))
 
 	store := mockdb.NewMockDB(ctrl)
 
 	store.EXPECT().
-		GetFromBucket(gomock.Eq(GetSlaveMetaDataKey(address[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("blockHeaderHash"))))))).
+		GetFromBucket(gomock.Eq(GetSlaveMetaDataKey(address[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", (common.Hash(sha256.Sum256([]byte("blockHeaderHash"))).String()))))).
 		Return(slaveMetadataSerialized, nil).AnyTimes()
 
 	output, err := GetSlaveMetaData(store, address[:], slaveXmssPK[:], blockHeaderHash, finalizedHeaderHash)
@@ -84,7 +84,7 @@ func TestSlaveCommit(t *testing.T) {
 
 	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
 	validatorXmssPK := validatorXmss.GetPK()
-	address := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	address := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 
 	slaveMetadata := NewSlaveMetaData(transactionHash, address[:], slaveXmssPK[:])
 

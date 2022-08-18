@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/xmss"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"github.com/theQRL/zond/metadata"
 )
@@ -37,8 +38,8 @@ func TestGetAddressState(t *testing.T) {
 	newAddressStateSerialized, _ := newAddressState.Serialize()
 	newAddressStateKey := GetAddressStateKey(newXmssAddr[:])
 
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	parentBlockHeaderHash := sha256.New().Sum([]byte("parentBlockHeaderHash"))
+	finalizedHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
+	parentBlockHeaderHash := common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash")))
 
 	store := mockdb.NewMockDB(ctrl)
 	store.EXPECT().GetFromBucket(gomock.Eq(newAddressStateKey), gomock.Eq(metadata.GetBlockBucketName(parentBlockHeaderHash))).Return(newAddressStateSerialized, nil).AnyTimes()

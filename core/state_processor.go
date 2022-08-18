@@ -5,6 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"reflect"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/go-qrllib/xmss"
@@ -24,8 +27,6 @@ import (
 	state2 "github.com/theQRL/zond/state"
 	"github.com/theQRL/zond/transactions"
 	"go.etcd.io/bbolt"
-	"math/big"
-	"reflect"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -45,7 +46,7 @@ func NewStateProcessor(config *params.ChainConfig, getHashFunc vm.GetHashFunc) *
 	}
 }
 
-func (p *StateProcessor) ProcessGenesisPreState(preState *protos.PreState, b *block.Block, db *db.DB, statedb *state.StateDB) error {
+func (p *StateProcessor) ProcessGenesisPreState(preState *protos.PreState, b *block.Block, db db.DB, statedb *state.StateDB) error {
 	m := metadata.NewMainChainMetaData(common.Hash{}, 0,
 		common.Hash{}, 0)
 	totalStakeAmount, _ := big.NewInt(0).MarshalText()

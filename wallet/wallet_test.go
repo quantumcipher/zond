@@ -15,7 +15,7 @@ import (
 func TestWalletCreation(t *testing.T) {
 	outFileName := "wallet_new.txt"
 	wallet := NewWallet(outFileName)
-	wallet.Add(4, 0)
+	wallet.AddXMSS(4, 0)
 
 	wallet.pbData = &protos.Wallet{}
 	if !misc.FileExists(outFileName) {
@@ -33,12 +33,12 @@ func TestWalletCreation(t *testing.T) {
 	expectedAddress := "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79"
 	expectedHexSeed := "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e00167939cb"
 
-	if wallet.pbData.XmssInfo[0].Address != expectedAddress {
-		t.Fatalf("Address Mismatch\nExpected: %s\nFound: %s", expectedAddress, wallet.pbData.XmssInfo[0].Address)
+	if wallet.pbData.Info[0].Address != expectedAddress {
+		t.Fatalf("Address Mismatch\nExpected: %s\nFound: %s", expectedAddress, wallet.pbData.Info[0].Address)
 	}
 
-	if wallet.pbData.XmssInfo[0].HexSeed != expectedHexSeed {
-		t.Fatalf("HexSeed Mismatch\nExpected: %s\nFound: %s", expectedHexSeed, wallet.pbData.XmssInfo[0].HexSeed)
+	if wallet.pbData.Info[0].HexSeed != expectedHexSeed {
+		t.Fatalf("HexSeed Mismatch\nExpected: %s\nFound: %s", expectedHexSeed, wallet.pbData.Info[0].HexSeed)
 	}
 }
 
@@ -57,7 +57,7 @@ func TestWalletBalance(t *testing.T) {
 				outFileName: "outfile",
 				pbData: &protos.Wallet{
 					Version: "1",
-					XmssInfo: []*protos.XMSSInfo{&protos.XMSSInfo{
+					Info: []*protos.Info{&protos.Info{
 						Address:  "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
 						HexSeed:  "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e00167939cb",
 						Mnemonic: "aback bunny flood taxi also blew harp vein dough vase onset cache isle found shrimp sparse affect sham leak ramp amidst bronze shirt nylon maid pushy heil span many brute broke accuse laity over",
@@ -74,8 +74,8 @@ func TestWalletBalance(t *testing.T) {
 				outFileName: "outfile",
 				pbData: &protos.Wallet{
 					Version: "1",
-					XmssInfo: []*protos.XMSSInfo{
-						&protos.XMSSInfo{
+					Info: []*protos.Info{
+						&protos.Info{
 							Address:  "000200c12f67d1941f95b23825fcc88c7be6e9a56f1953b2b50daec862896f45d90dd058a2ef79",
 							HexSeed:  "00020052fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c64981855ad8681d0d86d1e91e0016793",
 							Mnemonic: "aback bunny flood taxi also blew harp vein dough vase onset cache isle found shrimp sparse affect sham leak ramp amidst bronze shirt nylon maid pushy heil span many brute broke accuse laity over",
@@ -105,14 +105,14 @@ func TestXmssByIndex(t *testing.T) {
 	outFileName := "wallet_new.txt"
 	wallet := NewWallet(outFileName)
 
-	xmss, _ := wallet.GetXMSSByIndex(1)
+	xmss, _ := wallet.GetXMSSAccountByIndex(1)
 	if reflect.TypeOf(xmss).String() != "*xmss.XMSS" {
 		t.Errorf("expected xmss of type *xmss.XMSS, got (%T)", xmss)
 	}
 
 	address := xmss.GetAddress()
 	decoded := hex.EncodeToString(address[:])
-	if decoded != wallet.pbData.XmssInfo[0].Address {
-		t.Errorf("expected address (%s), got (%s)", wallet.pbData.XmssInfo[0].Address, decoded)
+	if decoded != wallet.pbData.Info[0].Address {
+		t.Errorf("expected address (%s), got (%s)", wallet.pbData.Info[0].Address, decoded)
 	}
 }

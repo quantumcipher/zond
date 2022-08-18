@@ -3,16 +3,14 @@ package block
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/go-qrllib/xmss"
-	"github.com/theQRL/zond/address"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"github.com/theQRL/zond/metadata"
-	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
@@ -24,23 +22,22 @@ func TestNewBlock(t *testing.T) {
 	blockProposer := dilithium.New()
 	blockProposerPK := blockProposer.GetPK()
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	masterXmss := xmss.NewXMSSFromHeight(4, 0)
 	masterXmssPK := masterXmss.GetPK()
-	masterAddr := address.GetAddressStateKey(masterXmssPK[:])
+	// masterAddr := address.GetAddressStateKey(masterXmssPK[:])
 
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: masterAddr,
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         masterXmssPK[:],
-		Signature:  []byte("blocksignature"),
+		NetworkId: 1,
+
+		Nonce:     uint64(10),
+		Pk:        masterXmssPK[:],
+		Signature: []byte("blocksignature"),
 	}
 	txs = append(txs, txn1)
-	fmt.Print(txs[0].Fee)
+
 	protocolTxs := make([]*protos.ProtocolTransaction, 100)
 	lastCoinBaseNonce := uint64(10)
 
@@ -65,11 +62,11 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 	blockProposer := dilithium.New()
 	blockProposerPK := blockProposer.GetPK()
 	slotNumber := uint64(102)
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	parentBlockHeaderHash := sha256.New().Sum([]byte("parentBlockHeaderHash"))
-	blockHeaderHash := sha256.New().Sum([]byte("blockHeaderHash"))
-	partialBlockSigningHash := sha256.New().Sum([]byte("partialBlockSigningHash"))
-	blockSigningHash := sha256.New().Sum([]byte("blockSigningHash"))
+	finalizedHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
+	parentBlockHeaderHash := common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash")))
+	blockHeaderHash := common.Hash(sha256.Sum256([]byte("blockHeaderHash")))
+	partialBlockSigningHash := common.Hash(sha256.Sum256([]byte("partialBlockSigningHash")))
+	blockSigningHash := common.Hash(sha256.Sum256([]byte("blockSigningHash")))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
@@ -101,20 +98,18 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 
 	networkId := uint64(1)
 	timestamp := ntp.GetNTP().Time()
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	masterXmss := xmss.NewXMSSFromHeight(4, 0)
 	masterXmssPK := masterXmss.GetPK()
-	masterAddr := address.GetAddressStateKey(masterXmssPK[:])
+	// masterAddr := address.GetAddressStateKey(masterXmssPK[:])
 
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: masterAddr,
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         masterXmssPK[:],
-		Signature:  []byte("blocksignature"),
+		NetworkId: 1,
+		Nonce:     uint64(10),
+		Pk:        masterXmssPK[:],
+		Signature: []byte("blocksignature"),
 	}
 	txs = append(txs, txn1)
 
@@ -129,10 +124,11 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 	}
 }
 
+/*
 func TestProcessEpochMetaData(t *testing.T) {
 	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
 	validatorXmssPK := validatorXmss.GetPK()
-	address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
 	validatorDilithium2 := dilithium.New()
@@ -140,7 +136,7 @@ func TestProcessEpochMetaData(t *testing.T) {
 	var validators [][]byte
 	validators = append(validators, validatorDilithiumPK[:])
 	validators = append(validators, validatorDilithium2PK[:])
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 	epochMetadata := metadata.NewEpochMetaData(1, parentHeaderHash, validators)
 
 	validatorsStakeAmount := make(map[string]uint64)
@@ -154,8 +150,6 @@ func TestProcessEpochMetaData(t *testing.T) {
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
 		NetworkId:  1,
-		MasterAddr: address_[:],
-		Fee:        uint64(10),
 		Nonce:      uint64(10),
 		Pk:         validatorXmssPK[:],
 		Signature:  []byte("blocksignature"),
@@ -231,8 +225,6 @@ func TestCalculateEpochMetaData(t *testing.T) {
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
 		NetworkId:  1,
-		MasterAddr: address_[:],
-		Fee:        uint64(10),
 		Nonce:      uint64(10),
 		Pk:         validatorXmssPK[:],
 		Signature:  []byte("blocksignature"),
@@ -272,6 +264,7 @@ func TestCalculateEpochMetaData(t *testing.T) {
 		t.Error("got unexpected error while calculating epoch metadata ", err)
 	}
 }
+*/
 
 func TestPartialBlockSigningHash(t *testing.T) {
 	validatorDilithiumPK, _ := hex.DecodeString("76d455148c84081a336b78f7761d26547fd0b47177536497187a9be83e13281336319c1134f47d7add05ab8fe2625380e74f7e309d7c7e9af7814b8e16795b9ee7a97e7c0fccd65ddd1030b816a051bf467546a540b9d69da4024a2223b7b18b65583d352004a1a45eca44acaf7d662d87130748b9f05fb9520e35ecdaf7a3b27eade2e2c052777c8a6dac5da8c982c58ad9ef303d6f4ec1d5719b58ad270c06d195b33bc9b972cf3ae7574a72ace289a9bd9837803b345640cbcfa595faef254f883471d08b8b1621924932632dbf30d9e4197afbd6dcd0fee5de410c5d650f32ad99afc2fb8247cf9a39cc0f9cb0f3c91cd43484ae95f38acf45a944a503ae0d67e05352165550a0fedaa4b34ee470771ea79964003ef02788dc315c1330018893bff075cc8d69defc09ec114e3dd96ef87321c6a097a8d32412ec113c081e299521c9e4ec82ab332f285ab86f1443cc01753be7875595cf4aa59d190d7f0fee0ef3981c141ac56dc33f30bd10f3c97eec09a97fff283453ec635ac59e90977fa94546eaeb83c287addb16a8a9df7de1523bbf90d13438e7fb2085040992d10635a0298b94411065e37fe6ddf80ce4bf06f6afc208e217605965a5ff5751c4645b88b8caa9bf2799bbe3e1952e77082d9a83485f6c71f7e788f5f365adbd38c5506e2cdab52081630554d53b646f86c40dc37faa348c4f227ef634d6bd41f028d78b91afc4a36ab02548cec53f847f47786ca07f70bf1bd2048087ee651deb2e31812f479de980213120a9c152fab124a2dcd2edf2e86ad1bdf248e8ae06be568c17b77424ed5ed80d5d909527a14869f0c1fbbf6f813c2d081a950da5aa43cf3667589855635eb38fdd6b7f708c738acdd760562dbb74c99b24ac77e7f789eae925122d77f9393df9e3f89b2db0c883da3292d40c755731e494f842433fd6f113a9763992d4acce8c3a39e3ca1e6c9023396179e1f3db30d57a981fab76018524f7db3e13161b4c20db6f8b20542800085d942390d9567a4c6863dc780e1363c5e853cf7ee1b0c3ab40a610df68b8f8543b768fd4b7f8b75d1581616919a41f6f1cc2d428c0a3c54a4a7d6fe0b62a94aec93a7e289354c69bce7e69b4008b6b84b4ffff60a4b2d177b26ab62b81ef958b393da9b50b6235eb574fd18e61e41e6f5064a756a73719ede8b7e2112457025867dd3faea3a5e40f306a8110de5d9bcd6460d8b2038b68a3a1f0df7f8f6e680cf106c1f33bc1ac757cb7e93d3911f0be4170d6aae1bf9d0127ec9bd110d22feaa59338b3057768a4e8b4cd4f05854d6845cde0a5d6a2e1c65a165ce0e13dc4711ce0e9b10604eef5956ac963c3014695c313e51561b16ff5a0d826c623af1d3769205ed376d0bd34232cfa1c51928306aa38359bbd4843b2798ca06702694db2805a2dd2a15a7f151b3e1bd49af3bccc75ce1e3bab813884fe23096340773df031bd8805e6885862b25fab4164d1f6b245156d227861b303fd56ca88fe3396ae74f5e9478329eac7d453b3cbc39e83d4ce1b4c5da8cab52a4673549b1ad8d07031b98c88af98b795d5914238669cc8d36bc2d2f6725c2ad24786a26d38e82b06f5c2e3e96afffeda1e91b6b0828b891ca0af03d91dc0022eefb47fbe281e5dec260d597fb2619c053ac68225c44873b464984507f218f053de458f02735745ef24339b44fbef5186c8552dd8a17b6a99edcf99a34ccd9293fb6a61e412c71c4d4f588b8fcb9024af0ec0dbdda62a51452f3fa39fdac1c7c41199684b22a5de3bbddcb5e20a5f80ee342cbffc7cebe37163394dac13152cb13ec381fff2b02f73b32a75c23b36608ff496be15f1053ae6a748182f27af21f4a19f0ab8c20e3b7c46f7077facf57b07fcd5e8120349a881243ea5b19376da432438b7fc4a125b6bf050606420b8a44a038c619464009dfdecbd90735c24b127af7908bdcb33f70f01473ac60c9a09599feecb466278a83271440412a38a20cdc8cc942975e1e9ac01aa3490d8e59e41b5bb3aa49513827b10643aeb4d0bba60be9cce3188e191ac44c3cd39eca9712c7d175bbc3822")
@@ -280,18 +273,18 @@ func TestPartialBlockSigningHash(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
 	lastCoinBaseNonce := uint64(10)
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK, slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
-	expected_hash := "e505b7c2a1a0ac26f00b4ab4cd080d97bfbe641d8b04c2a3656fa9a86b2cbb9f"
+	expected_hash := "0xf1481b8fdeb66ff65213c23551ab371d3a2bbc78b95f53738b290f3ef3ccea31"
 	partialBlockSigningHash := newBlock.PartialBlockSigningHash()
 
-	if hex.EncodeToString(partialBlockSigningHash) != expected_hash {
-		t.Errorf("expected partial block signing hash (%v), got (%v)", expected_hash, hex.EncodeToString(partialBlockSigningHash))
+	if partialBlockSigningHash.String() != expected_hash {
+		t.Errorf("expected partial block signing hash (%v), got (%v)", expected_hash, partialBlockSigningHash.String())
 	}
 }
 
@@ -302,18 +295,18 @@ func TestBlockSigningHash(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
 	lastCoinBaseNonce := uint64(10)
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK, slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
-	expected_hash := "e505b7c2a1a0ac26f00b4ab4cd080d97bfbe641d8b04c2a3656fa9a86b2cbb9f"
+	expected_hash := "0x94bd38943fc2688140676d8e126d3ca2d2b9c4ac073f78aba9b795fcfe265e3e"
 	blockSigningHash := newBlock.BlockSigningHash()
 
-	if hex.EncodeToString(blockSigningHash) != expected_hash {
-		t.Errorf("expected blocksigning hash (%v), got (%v)", expected_hash, hex.EncodeToString(blockSigningHash))
+	if blockSigningHash.String() != expected_hash {
+		t.Errorf("expected blocksigning hash (%v), got (%v)", expected_hash, blockSigningHash.String())
 	}
 }
 
@@ -323,7 +316,7 @@ func TestAttest(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
@@ -343,7 +336,7 @@ func TestAddAttestTx(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction

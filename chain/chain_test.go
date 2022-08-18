@@ -8,10 +8,9 @@ import (
 	"testing"
 
 	"github.com/theQRL/go-qrllib/dilithium"
-	"github.com/theQRL/go-qrllib/xmss"
-	"github.com/theQRL/zond/chain/block"
+	"github.com/theQRL/zond/block"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/metadata"
-	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
@@ -90,15 +89,15 @@ func TestGetTotalStakeAmount(t *testing.T) {
 	defer os.Remove("testStateDb.txt")
 	chain := NewChain(state)
 
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 	totalStakeAmount := []byte("100")
 
 	mainChainMetaData := metadata.NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
-	parentBlockMetadata := metadata.NewBlockMetaData(nil, lastBlockHeaderHash, lastBlockSlotNumber, totalStakeAmount)
+	parentBlockMetadata := metadata.NewBlockMetaData(lastBlockHeaderHash, lastBlockHeaderHash, lastBlockSlotNumber, totalStakeAmount, common.Hash{})
 
 	err := state.DB().DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))
@@ -140,9 +139,9 @@ func TestGetStartingNonFinalizedEpoch(t *testing.T) {
 	defer os.Remove("testStateDb.txt")
 	chain := NewChain(state)
 
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := metadata.NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -182,16 +181,16 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 	slotNumber := uint64(201)
 	parentSlotNumber := uint64(150)
 	parentSlotNumber2 := uint64(50)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	parentHeaderHash2 := sha256.New().Sum([]byte("parentHeaderHash2"))
+	parentHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("parentHeaderHash")))
+	parentHeaderHash2 := common.BytesToHash(sha256.New().Sum([]byte("parentHeaderHash2")))
 	totalStakeAmount := []byte("100")
 
-	parentBlockMetadata := metadata.NewBlockMetaData(parentHeaderHash2, parentHeaderHash, parentSlotNumber, totalStakeAmount)
-	parentBlockMetadata2 := metadata.NewBlockMetaData(parentHeaderHash2, parentHeaderHash2, parentSlotNumber2, totalStakeAmount)
+	parentBlockMetadata := metadata.NewBlockMetaData(parentHeaderHash2, parentHeaderHash, parentSlotNumber, totalStakeAmount, common.Hash{})
+	parentBlockMetadata2 := metadata.NewBlockMetaData(parentHeaderHash2, parentHeaderHash2, parentSlotNumber2, totalStakeAmount, common.Hash{})
 
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	// validatorXmss := xmss.NewXMSSFromHeight(4, 0)
+	// validatorXmssPK := validatorXmss.GetPK()
+	// address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
 	validatorDilithium2 := dilithium.New()
@@ -201,19 +200,12 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 	validators = append(validators, validatorDilithium2PK[:])
 	epochMetadata := metadata.NewEpochMetaData(1, parentHeaderHash2, validators)
 
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(202)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastBlockHeaderhash"))
+	lastBlockHeaderHash := common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderhash")))
 	lastBlockSlotNumber := uint64(155)
 	mainChainMetaData := metadata.NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
-
-	dilithiumMetadata := metadata.NewDilithiumMetaData(transactionHash, validatorDilithiumPK[:], address_[:], true)
-	dilithiumMetadata.AddBalance(100)
-
-	dilithiumMetadata2 := metadata.NewDilithiumMetaData(transactionHash, validatorDilithium2PK[:], address_[:], true)
-	dilithiumMetadata2.AddBalance(200)
 	state, _ := state.NewState("./", "testStateDb.txt")
 	defer os.Remove("testStateDb.txt")
 	chain := NewChain(state)
@@ -222,26 +214,10 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 	timestamp := ntp.GetNTP().Time()
 
 	var txs []*protos.Transaction
-	// txn1 := &protos.Transaction{
-	// 	NetworkId:  1,
-	// 	MasterAddr: address_[:],
-	// 	Fee:        uint64(10),
-	// 	Nonce:      uint64(10),
-	// 	Pk:         validatorXmssPK[:],
-	// 	Signature:  []byte("blocksignature"),
-	// }
-	// txs = append(txs, txn1)
 	var protocolTxs []*protos.ProtocolTransaction
-	// ptxn1 := &protos.ProtocolTransaction{
-	// 	NetworkId: 1,
-	// 	Nonce:     10,
-	// 	Pk:        validators[0],
-	// 	Signature: []byte("blocksignature"),
-	// }
-	// protocolTxs = append(protocolTxs, ptxn1)
 	lastCoinBaseNonce := uint64(10)
 
-	newBlock := block.NewBlock(networkId, timestamp, validatorDilithiumPK[:], parentSlotNumber, parentHeaderHash2, txs, protocolTxs, lastCoinBaseNonce)
+	_ = block.NewBlock(networkId, timestamp, validatorDilithiumPK[:], parentSlotNumber, parentHeaderHash2, txs, protocolTxs, lastCoinBaseNonce)
 
 	err := state.DB().DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))
@@ -277,10 +253,10 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 		t.Errorf("unexpected error committing to database (%v)", err)
 	}
 
-	err = newBlock.Commit(state.DB(), parentHeaderHash, true)
-	if err != nil {
-		t.Error("unexpected error committing block to database: ", err)
-	}
+	// err = newBlock.Commit(state.DB(), parentHeaderHash, true)
+	// if err != nil {
+	// 	t.Error("unexpected error committing block to database: ", err)
+	// }
 
 	err = state.DB().DB().Update(func(tx *bbolt.Tx) error {
 		bucketName := metadata.GetBlockBucketName(parentHeaderHash)
@@ -293,14 +269,14 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 			return nil
 		}
 
-		err = dilithiumMetadata.Commit(blockBucket)
-		if err != nil {
-			return err
-		}
-		err = dilithiumMetadata2.Commit(blockBucket)
-		if err != nil {
-			return err
-		}
+		// err = dilithiumMetadata.Commit(blockBucket)
+		// if err != nil {
+		// 	return err
+		// }
+		// err = dilithiumMetadata2.Commit(blockBucket)
+		// if err != nil {
+		// 	return err
+		// }
 
 		return nil
 	})
@@ -309,7 +285,7 @@ func TestGetSlotLeaderDilithiumPKBySlotNumber(t *testing.T) {
 		t.Errorf("unexpected error committing to database (%v)", err)
 	}
 
-	_, err = chain.GetSlotLeaderDilithiumPKBySlotNumber(slotNumber, parentHeaderHash, parentSlotNumber)
+	_, err = chain.GetSlotLeaderDilithiumPKBySlotNumber(common.Hash{}, slotNumber, parentHeaderHash)
 	if err != nil {
 		t.Error("got unexpected error while fetching slot leader: ", err)
 	}

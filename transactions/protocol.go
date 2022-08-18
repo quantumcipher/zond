@@ -3,6 +3,7 @@ package transactions
 import (
 	"bytes"
 	"crypto/sha256"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/zond/common"
@@ -122,9 +123,9 @@ func (tx *ProtocolTransaction) GenerateTxHash(hashableBytes common.Hash) common.
 	return hash
 }
 
-func (tx *ProtocolTransaction) GenerateUnSignedTxHash(hashableBytes []byte) []byte {
+func (tx *ProtocolTransaction) GenerateUnSignedTxHash(hashableBytes common.Hash) []byte {
 	tmp := new(bytes.Buffer)
-	tmp.Write(hashableBytes)
+	tmp.Write(hashableBytes[:])
 	tmp.Write(tx.PK())
 
 	h := sha256.New()

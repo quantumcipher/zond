@@ -1,9 +1,10 @@
 package metadata
 
 import (
+	"reflect"
+
 	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/db"
-	"reflect"
 )
 
 func GetDataByBucket(db db.DB, key []byte, headerHash common.Hash, finalizedHeaderHash common.Hash) ([]byte, error) {

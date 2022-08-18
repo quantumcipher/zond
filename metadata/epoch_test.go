@@ -8,18 +8,19 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewEpochMetaData(t *testing.T) {
 	epoch := uint64(1)
-	prevSlotLastBlockHeaderHash := sha256.New().Sum([]byte("prevSlotLastBlockHeaderHash"))
+	prevSlotLastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("prevSlotLastBlockHeaderHash")))
 
 	epochMetadata := NewEpochMetaData(epoch, prevSlotLastBlockHeaderHash, nil)
 
-	if string(epochMetadata.PrevSlotLastBlockHeaderHash()) != string(prevSlotLastBlockHeaderHash) {
-		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(prevSlotLastBlockHeaderHash), string(epochMetadata.PrevSlotLastBlockHeaderHash()))
+	if epochMetadata.PrevSlotLastBlockHeaderHash().String() != prevSlotLastBlockHeaderHash.String() {
+		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", prevSlotLastBlockHeaderHash.String(), epochMetadata.PrevSlotLastBlockHeaderHash().String())
 	}
 
 	if epochMetadata.Epoch() != epoch {
@@ -32,20 +33,18 @@ func TestGetEpochMetaData(t *testing.T) {
 
 	epoch := uint64(1)
 	currentBlockSlotNumber := uint64(178)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 	slotNumber := uint64(178)
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"))
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"), common.Hash{})
 	blockMetadataSerialized, _ := blockMetadata.Serialize()
 
 	slotNumber2 := uint64(50)
-	blockMetadata2 := NewBlockMetaData(nil, parentHeaderHash, slotNumber2, []byte("100"))
+	blockMetadata2 := NewBlockMetaData(common.Hash(sha256.Sum256([]byte("parentsparentHeaderHash"))), parentHeaderHash, slotNumber2, []byte("100"), common.Hash{})
 	blockMetadataSerialized2, _ := blockMetadata2.Serialize()
 
 	epochMetadata := NewEpochMetaData(epoch, parentHeaderHash, nil)
 	epochMetadataSerialized, _ := epochMetadata.Serialize()
-
-	fmt.Printf("blockheader key is %s\n", GetBlockMetaDataKey(headerHash))
 
 	store := mockdb.NewMockDB(ctrl)
 	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(headerHash))).Return(blockMetadataSerialized, nil).AnyTimes()
@@ -57,8 +56,8 @@ func TestGetEpochMetaData(t *testing.T) {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.PrevSlotLastBlockHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(parentHeaderHash), string(output.PrevSlotLastBlockHeaderHash()))
+	if output.PrevSlotLastBlockHeaderHash().String() != parentHeaderHash.String() {
+		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", parentHeaderHash.String(), output.PrevSlotLastBlockHeaderHash().String())
 	}
 
 	if output.Epoch() != epoch {
@@ -68,7 +67,7 @@ func TestGetEpochMetaData(t *testing.T) {
 
 func TestAllotSlots(t *testing.T) {
 	epoch := uint64(1)
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
@@ -93,7 +92,7 @@ func TestEpochCommit(t *testing.T) {
 	}
 
 	epoch := uint64(1)
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()

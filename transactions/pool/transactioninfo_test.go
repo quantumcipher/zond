@@ -1,7 +1,6 @@
 package pool
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/theQRL/zond/api/view"
@@ -11,14 +10,14 @@ import (
 func TestCreateTransactionInfo(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(10)
 	timestamp := ntp.GetNTP().Time()
 
 	transactionInfo := CreateTransactionInfo(txn, txHash, blockNumber, timestamp)
 
-	if string(transactionInfo.txHash) != string(txHash) {
-		t.Errorf("expected transaction in create transactionInfo (%v), got (%v)", hex.EncodeToString(txHash), hex.EncodeToString(transactionInfo.TxHash()))
+	if transactionInfo.txHash.String() != txHash.String() {
+		t.Errorf("expected transaction in create transactionInfo (%v), got (%v)", txHash.String(), transactionInfo.TxHash().String())
 	}
 }
 
@@ -42,7 +41,7 @@ func TestCreateTransactionInfo(t *testing.T) {
 func TestIsStale(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 
@@ -84,7 +83,7 @@ func TestIsStale(t *testing.T) {
 func TestUpdateBlockNumber(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 

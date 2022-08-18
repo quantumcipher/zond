@@ -10,7 +10,7 @@ import (
 func TestPush(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 
@@ -27,7 +27,7 @@ func TestPush(t *testing.T) {
 func TestPop(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 
@@ -45,7 +45,7 @@ func TestPop(t *testing.T) {
 func TestRemove(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 
@@ -63,7 +63,7 @@ func TestRemove(t *testing.T) {
 func TestRemoveByIndex(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 
@@ -81,7 +81,7 @@ func TestRemoveByIndex(t *testing.T) {
 func TestContains(t *testing.T) {
 	tx := view.PlainTransferTransaction{}
 	txn, _ := tx.ToTransferTransactionObject()
-	txHash := txn.TxHash(txn.GetSigningHash())
+	txHash := txn.Hash()
 	blockNumber := uint64(30)
 	timestamp := ntp.GetNTP().Time()
 

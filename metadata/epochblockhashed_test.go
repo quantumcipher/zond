@@ -2,7 +2,6 @@ package metadata
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"testing"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/golang/mock/gomock"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
 	mockdb "github.com/theQRL/zond/db/mock"
 
@@ -64,7 +64,7 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 
 	slotNumber := epoch*config.GetDevConfig().BlocksPerEpoch + 1
 
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := common.BytesToHash(sha256.New().Sum([]byte("headerHash")))
 
 	epochBlockHashesMetadata := NewEpochBlockHashes(epoch)
 
@@ -72,11 +72,11 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 	epochBlockHashesMetadata2.pbData.BlockHashesBySlotNumber[0].SlotNumber = 2000
 
 	epochBlockHashesMetadata3 := NewEpochBlockHashes(uint64(3))
-	epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes = append(epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes, headerHash)
+	epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes = append(epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes, headerHash.Bytes())
 
 	testCases := []struct {
 		name             string
-		headerHash       []byte
+		headerHash       common.Hash
 		slotNumber       uint64
 		epochBlockHashes *EpochBlockHashes
 		expectedError    error
@@ -107,7 +107,7 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 			headerHash:       headerHash,
 			slotNumber:       3*config.GetDevConfig().BlocksPerEpoch + 0,
 			epochBlockHashes: epochBlockHashesMetadata3,
-			expectedError:    fmt.Errorf("Headerhash %s already exists", hex.EncodeToString(headerHash)),
+			expectedError:    fmt.Errorf("Headerhash %s already exists", headerHash.String()),
 		},
 	}
 	for i := range testCases {

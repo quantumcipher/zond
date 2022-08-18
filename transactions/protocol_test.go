@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/protos"
 )
 
@@ -30,16 +31,16 @@ func TestProtocolGenerateTxHash(t *testing.T) {
 	feeReward := uint64(0)
 	lastCoinBaseNonce := uint64(10)
 
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
+	transactionHash := common.Hash(sha256.Sum256([]byte("transactionHash")))
 
 	coinbase := NewCoinBase(networkId, blockProposerPK[:], blockProposerReward, attestorReward, feeReward, lastCoinBaseNonce)
 
-	expectedHash, _ := hex.DecodeString("7a6570e1444e255d6d3752ade13c6a2764804f62477be60f085dfebe143062cf")
+	expectedHash := "0x4d43ca59c590a069f6c09b4344308a62af6cfc41d4cbb0a18b2846aa2ea8c6a2"
 
 	output := coinbase.GenerateTxHash(transactionHash)
 
-	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
-		t.Errorf("expected protocal signing hash (%v), got (%v)", hex.EncodeToString(output), hex.EncodeToString(expectedHash))
+	if output.String() != expectedHash {
+		t.Errorf("expected protocal signing hash (%v), got (%v)", expectedHash, output.String())
 	}
 }
 
@@ -51,15 +52,15 @@ func TestGenerateUnSignedTxHash(t *testing.T) {
 	feeReward := uint64(0)
 	lastCoinBaseNonce := uint64(10)
 
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
+	transactionHash := common.Hash(sha256.Sum256([]byte("transactionHash")))
 
 	coinbase := NewCoinBase(networkId, blockProposerPK[:], blockProposerReward, attestorReward, feeReward, lastCoinBaseNonce)
 
-	expectedHash, _ := hex.DecodeString("7a6570e1444e255d6d3752ade13c6a2764804f62477be60f085dfebe143062cf")
+	expectedHash := "4d43ca59c590a069f6c09b4344308a62af6cfc41d4cbb0a18b2846aa2ea8c6a2"
 
 	output := coinbase.GenerateUnSignedTxHash(transactionHash)
 
-	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
-		t.Errorf("expected protocal signing hash (%v), got (%v)", hex.EncodeToString(output), hex.EncodeToString(expectedHash))
+	if hex.EncodeToString(output) != expectedHash {
+		t.Errorf("expected protocal signing hash (%v), got (%v)", expectedHash, hex.EncodeToString(output))
 	}
 }

@@ -6,34 +6,35 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewMainChainMetaData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
 
-	if string(mainChainMetaData.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash) {
-		t.Errorf("expected finalized block header hash (%v), got (%v)", string(mainChainMetaData.FinalizedBlockHeaderHash()), string(finalizedBlockHeaderHash))
+	if mainChainMetaData.FinalizedBlockHeaderHash().String() != finalizedBlockHeaderHash.String() {
+		t.Errorf("expected finalized block header hash (%v), got (%v)", mainChainMetaData.FinalizedBlockHeaderHash().String(), finalizedBlockHeaderHash.String())
 	}
 
-	if string(mainChainMetaData.LastBlockHeaderHash()) != string(lastBlockHeaderHash) {
-		t.Errorf("expected last block header hash (%v), got (%v)", string(mainChainMetaData.LastBlockHeaderHash()), string(lastBlockHeaderHash))
+	if mainChainMetaData.LastBlockHeaderHash().String() != lastBlockHeaderHash.String() {
+		t.Errorf("expected last block header hash (%v), got (%v)", mainChainMetaData.LastBlockHeaderHash().String(), lastBlockHeaderHash.String())
 	}
 }
 
 func TestGetMainChainMetaData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -50,22 +51,22 @@ func TestGetMainChainMetaData(t *testing.T) {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash) {
-		t.Errorf("expected finalized block header hash (%v), got (%v)", string(output.FinalizedBlockHeaderHash()), string(finalizedBlockHeaderHash))
+	if output.FinalizedBlockHeaderHash().String() != finalizedBlockHeaderHash.String() {
+		t.Errorf("expected finalized block header hash (%v), got (%v)", output.FinalizedBlockHeaderHash().String(), finalizedBlockHeaderHash.String())
 	}
 
-	if string(output.LastBlockHeaderHash()) != string(lastBlockHeaderHash) {
-		t.Errorf("expected last block header hash (%v), got (%v)", string(output.LastBlockHeaderHash()), string(lastBlockHeaderHash))
+	if output.LastBlockHeaderHash().String() != lastBlockHeaderHash.String() {
+		t.Errorf("expected last block header hash (%v), got (%v)", output.LastBlockHeaderHash().String(), lastBlockHeaderHash.String())
 	}
 }
 
 func TestUpdateFinalizedBlockData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
-	finalizedBlockHeaderHash2 := sha256.New().Sum([]byte("finalizedHeaderHash2"))
+	finalizedBlockHeaderHash2 := common.BytesToHash(sha256.New().Sum([]byte("finalizedHeaderHash2")))
 	finalizedBlockSlotNumber2 := uint64(11)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -73,7 +74,7 @@ func TestUpdateFinalizedBlockData(t *testing.T) {
 
 	mainChainMetaData.UpdateFinalizedBlockData(finalizedBlockHeaderHash2, finalizedBlockSlotNumber2)
 
-	if string(mainChainMetaData.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash2) {
+	if mainChainMetaData.FinalizedBlockHeaderHash().String() != finalizedBlockHeaderHash2.String() {
 		t.Errorf("the finalized block header hash not able to update")
 	}
 
@@ -83,12 +84,12 @@ func TestUpdateFinalizedBlockData(t *testing.T) {
 }
 
 func TestUpdateLastBlockData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
-	lastBlockHeaderHash2 := sha256.New().Sum([]byte("lastHeaderHash2"))
+	lastBlockHeaderHash2 := common.BytesToHash(sha256.New().Sum([]byte("lastHeaderHash2")))
 	lastBlockSlotNumber2 := uint64(11)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -96,7 +97,7 @@ func TestUpdateLastBlockData(t *testing.T) {
 
 	mainChainMetaData.UpdateLastBlockData(lastBlockHeaderHash2, lastBlockSlotNumber2)
 
-	if string(mainChainMetaData.LastBlockHeaderHash()) != string(lastBlockHeaderHash2) {
+	if mainChainMetaData.LastBlockHeaderHash().String() != lastBlockHeaderHash2.String() {
 		t.Errorf("the finalized block header hash not able to update")
 	}
 
@@ -112,9 +113,9 @@ func TestCommit(t *testing.T) {
 		t.Error(err.Error())
 	}
 
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := common.Hash(sha256.Sum256([]byte("lastblockHeaderhash")))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,

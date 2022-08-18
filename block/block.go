@@ -6,6 +6,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"reflect"
+
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/go-qrllib/dilithium"
@@ -17,8 +20,6 @@ import (
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
 	"github.com/theQRL/zond/transactions"
-	"math/big"
-	"reflect"
 )
 
 type Header struct {
@@ -269,7 +270,7 @@ func NewBlock(networkId uint64, timestamp uint64, proposerDilithiumPK []byte, sl
 	return b
 }
 
-func (b *Block) UpdateFinalizedEpoch(db *db.DB, stateContext *state.StateContext) error {
+func (b *Block) UpdateFinalizedEpoch(db db.DB, stateContext *state.StateContext) error {
 	currentEpochMetaData := stateContext.GetEpochMetaData()
 	// Ignore Finalization if TotalStakeAmountFound is less than the 2/3rd of TotalStakeAmountAlloted
 	if currentEpochMetaData.TotalStakeAmountFound()*3 < currentEpochMetaData.TotalStakeAmountAlloted()*2 {
@@ -360,7 +361,7 @@ func GetBlockStorageKey(blockHeaderHash common.Hash) []byte {
 	return []byte(fmt.Sprintf("BLOCK-%s", blockHeaderHash))
 }
 
-func GetBlock(db *db.DB, blockHeaderHash common.Hash) (*Block, error) {
+func GetBlock(db db.DB, blockHeaderHash common.Hash) (*Block, error) {
 	data, err := db.Get(GetBlockStorageKey(blockHeaderHash))
 	if err != nil {
 		return nil, err

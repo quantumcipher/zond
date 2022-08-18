@@ -7,20 +7,21 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewBlockMetaData(t *testing.T) {
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 	slotNumber := uint64(178)
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, common.Hash{})
 
-	if string(blockMetadata.ParentHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected parent headerhash (%v), got (%v)", string(parentHeaderHash), string(blockMetadata.ParentHeaderHash()))
+	if blockMetadata.ParentHeaderHash().String() != parentHeaderHash.String() {
+		t.Errorf("expected parent headerhash (%v), got (%v)", parentHeaderHash.String(), blockMetadata.ParentHeaderHash().String())
 	}
 
 	if blockMetadata.SlotNumber() != slotNumber {
@@ -31,12 +32,12 @@ func TestNewBlockMetaData(t *testing.T) {
 func TestGetBlockMetaData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 	slotNumber := uint64(178)
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, common.Hash{})
 	blockMetadataSerialized, _ := blockMetadata.Serialize()
 
 	store := mockdb.NewMockDB(ctrl)
@@ -47,8 +48,8 @@ func TestGetBlockMetaData(t *testing.T) {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.ParentHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected parent headerhash (%v), got (%v)", string(parentHeaderHash), string(output.ParentHeaderHash()))
+	if output.ParentHeaderHash().String() != parentHeaderHash.String() {
+		t.Errorf("expected parent headerhash (%v), got (%v)", parentHeaderHash.String(), output.ParentHeaderHash().String())
 	}
 
 	if output.SlotNumber() != slotNumber {
@@ -63,12 +64,12 @@ func TestBlockCommit(t *testing.T) {
 		t.Error(err.Error())
 	}
 
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := common.Hash(sha256.Sum256([]byte("parentHeaderHash")))
+	headerHash := common.Hash(sha256.Sum256([]byte("headerHash")))
 	slotNumber := uint64(178)
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, common.Hash{})
 
 	store := mockdb.NewMockDB(ctrl)
 	store.EXPECT().DB().Return(db).AnyTimes()

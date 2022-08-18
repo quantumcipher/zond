@@ -1,6 +1,11 @@
 package main
 
 import (
+	"io/ioutil"
+	"os"
+	"os/signal"
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/mattn/go-colorable"
 	log "github.com/sirupsen/logrus"
@@ -14,10 +19,6 @@ import (
 	"github.com/theQRL/zond/p2p"
 	"github.com/theQRL/zond/state"
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
-	"io/ioutil"
-	"os"
-	"os/signal"
-	"time"
 )
 
 var (

@@ -13,7 +13,7 @@ import (
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/go-qrllib/xmss"
 	"github.com/theQRL/zond/address"
-	"github.com/theQRL/zond/config"
+	"github.com/theQRL/zond/common"
 	mockdb "github.com/theQRL/zond/db/mock"
 	"github.com/theQRL/zond/metadata"
 	"github.com/theQRL/zond/misc"
@@ -30,42 +30,35 @@ func TestProcessValidatorStakeAmount(t *testing.T) {
 	blockProposer := dilithium.New()
 	blockProposerPK := blockProposer.GetPK()
 
-	transaction := xmss.NewXMSSFromHeight(4, 0)
-	transactionPK := transaction.GetPK()
+	// transaction := xmss.NewXMSSFromHeight(4, 0)
+	// transactionPK := transaction.GetPK()
 
 	ctrl := gomock.NewController(t)
 
 	store := mockdb.NewMockDB(ctrl)
 
-	txaddress := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK(transactionPK[:]))
+	// txaddress := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK(transactionPK[:]))
 
-	dilithiumState := make(map[string]*metadata.DilithiumMetaData)
-	dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorPK[:]))] = metadata.NewDilithiumMetaData(
-		sha256.New().Sum([]byte("transactionHash")),
-		validatorPK[:],
-		txaddress[:],
-		true,
-	)
+	// dilithiumState := make(map[string]*metadata.DilithiumMetaData)
+	// dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorPK[:]))] = metadata.NewDilithiumMetaData(
+	// 	sha256.New().Sum([]byte("transactionHash")),
+	// 	validatorPK[:],
+	// 	txaddress[:],
+	// 	true,
+	// )
 
-	dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorPK[:]))].AddBalance(20)
+	// dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorPK[:]))].AddBalance(20)
 
 	stateContext := &StateContext{
 		db:                           store,
-		addressesState:               make(map[string]*address.AddressState),
-		dilithiumState:               dilithiumState,
-		slaveState:                   make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:                make(map[string]*metadata.OTSIndexMetaData),
-		currentBlockTotalStakeAmount: 10,
+		currentBlockTotalStakeAmount: big.NewInt(10),
 		slotNumber:                   0,
 		blockProposer:                blockProposerPK[:],
-		finalizedHeaderHash:          sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:        sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:              sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash:      sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:             sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress:      make(map[string][]byte),
-		attestorsFlag:                make(map[string]bool),
-		blockProposerFlag:            false,
+		finalizedHeaderHash:          common.Hash(sha256.Sum256([]byte("finalizedHeaderHash"))),
+		parentBlockHeaderHash:        common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))),
+		blockHeaderHash:              common.Hash(sha256.Sum256([]byte("blockHeaderHash"))),
+		partialBlockSigningHash:      common.Hash(sha256.Sum256([]byte("partialBlockSigningHash"))),
+		blockSigningHash:             common.Hash(sha256.Sum256([]byte("blockSigningHash"))),
 
 		epochMetaData:     &metadata.EpochMetaData{},
 		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
@@ -96,8 +89,7 @@ func TestProcessValidatorStakeAmount(t *testing.T) {
 		tc := testCases[i]
 
 		t.Run(tc.name, func(t *testing.T) {
-			initialCurrentStakeAmount := tc.stateContext.currentBlockTotalStakeAmount
-			err := tc.stateContext.processValidatorStakeAmount(tc.dilithiumPK[:])
+			err := tc.stateContext.processValidatorStakeAmount(tc.dilithiumPK[:], big.NewInt(10))
 
 			if err != nil && (err.Error() != tc.expectedError.Error()) {
 				fmt.Printf("error is %s", err.Error())
@@ -105,12 +97,6 @@ func TestProcessValidatorStakeAmount(t *testing.T) {
 				t.Errorf("expected error (%s), got error (%s)", x, err.Error())
 			}
 
-			strKey := hex.EncodeToString(metadata.GetDilithiumMetaDataKey(tc.dilithiumPK))
-			slotLeaderDilithiumMetaData, ok := tc.stateContext.dilithiumState[strKey]
-
-			if ok && (initialCurrentStakeAmount+slotLeaderDilithiumMetaData.Balance() != tc.stateContext.currentBlockTotalStakeAmount) {
-				t.Errorf("expected total block stake amount (%d), got (%d)", initialCurrentStakeAmount+slotLeaderDilithiumMetaData.Balance(), tc.stateContext.currentBlockTotalStakeAmount)
-			}
 		})
 	}
 }
@@ -140,22 +126,15 @@ func TestProcessAttestorsFlag(t *testing.T) {
 	attestorsFlag[strAttestorDilithiumPK2] = true
 
 	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
+		db: store,
 
 		slotNumber:              0,
 		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           attestorsFlag,
-		blockProposerFlag:       false,
+		finalizedHeaderHash:     common.Hash(sha256.Sum256([]byte("finalizedHeaderHash"))),
+		parentBlockHeaderHash:   common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))),
+		blockHeaderHash:         common.Hash(sha256.Sum256([]byte("blockHeaderHash"))),
+		partialBlockSigningHash: common.Hash(sha256.Sum256([]byte("partialBlockSigningHash"))),
+		blockSigningHash:        common.Hash(sha256.Sum256([]byte("blockSigningHash"))),
 
 		epochMetaData:     &metadata.EpochMetaData{},
 		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
@@ -192,7 +171,7 @@ func TestProcessAttestorsFlag(t *testing.T) {
 		tc := testCases[i]
 
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.stateContext.ProcessAttestorsFlag(tc.dilithiumPK)
+			err := tc.stateContext.ProcessAttestorsFlag(tc.dilithiumPK, big.NewInt(10))
 
 			if err != nil && (err.Error() != tc.expectedError.Error()) {
 				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
@@ -213,45 +192,14 @@ func TestProcessBlockProposerFlag(t *testing.T) {
 	blockProposerPK := blockProposer.GetPK()
 
 	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
+		db:                      store,
 		slotNumber:              0,
 		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: &metadata.MainChainMetaData{},
-	}
-
-	stateContext2 := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       true,
+		finalizedHeaderHash:     common.Hash(sha256.Sum256([]byte("finalizedHeaderHash"))),
+		parentBlockHeaderHash:   common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))),
+		blockHeaderHash:         common.Hash(sha256.Sum256([]byte("blockHeaderHash"))),
+		partialBlockSigningHash: common.Hash(sha256.Sum256([]byte("partialBlockSigningHash"))),
+		blockSigningHash:        common.Hash(sha256.Sum256([]byte("blockSigningHash"))),
 
 		epochMetaData:     &metadata.EpochMetaData{},
 		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
@@ -276,1167 +224,16 @@ func TestProcessBlockProposerFlag(t *testing.T) {
 			stateContext:  *stateContext,
 			expectedError: errors.New("unexpected block proposer"),
 		},
-		{
-			name:          "block proposer already proposed",
-			dilithiumPK:   blockProposerPK[:],
-			stateContext:  *stateContext2,
-			expectedError: errors.New("block proposer has already been processed"),
-		},
 	}
 
 	for i := range testCases {
 		tc := testCases[i]
 
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.stateContext.ProcessBlockProposerFlag(tc.dilithiumPK)
+			err := tc.stateContext.ProcessBlockProposerFlag(tc.dilithiumPK, big.NewInt(10))
 
 			if err != nil && (err.Error() != tc.expectedError.Error()) {
 				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-		})
-	}
-}
-
-func TestPrepareAddressState(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	db, _ := bbolt.Open("./", 0600, &bbolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	validatorsToXMSSAddress := make(map[string][]byte)
-	validatorsToXMSSAddress[hex.EncodeToString(validatorDilithiumPK[:])] = validatorXmssPK[:]
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	addressesState := make(map[string]*address.AddressState)
-	strKey := hex.EncodeToString(address.GetAddressStateKey(validatorXmssPK[:]))
-
-	addressesState[strKey] = address.NewAddressState(validatorXmssPK[:], 0, 10)
-	serialized_address, _ := address.NewAddressState(validatorXmssPK[:], 0, 10).Serialize()
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().GetFromBucket(gomock.Any(), gomock.Any()).Return(serialized_address, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Any()).AnyTimes()
-	store.EXPECT().DB().Return(db).AnyTimes()
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: addressesState,
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: validatorsToXMSSAddress,
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-
-	testCases := []struct {
-		name          string
-		dilithiumPK   []byte
-		stateContext  StateContext
-		expectedError error
-	}{
-		{
-			name:          "ok",
-			dilithiumPK:   validatorDilithiumPK[:],
-			stateContext:  *stateContext,
-			expectedError: nil,
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.stateContext.PrepareAddressState(hex.EncodeToString(validatorXmssPK[:]))
-
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-			strKey := hex.EncodeToString(address.GetAddressStateKey(validatorXmssPK[:]))
-			addressesState := tc.stateContext.addressesState[strKey]
-
-			expectedAddressState, err := address.GetAddressState(tc.stateContext.db, validatorXmssPK[:],
-				tc.stateContext.parentBlockHeaderHash, tc.stateContext.mainChainMetaData.FinalizedBlockHeaderHash())
-			if err != nil {
-				t.Errorf("Address state not set for address %s", hex.EncodeToString(validatorXmssPK[:]))
-			}
-
-			if string(addressesState.Address()) != string(expectedAddressState.Address()) {
-				t.Errorf("expected addressstate addresses does not match")
-			}
-
-			if addressesState.Balance() != expectedAddressState.Balance() {
-				t.Errorf("expected addressstate balance does not match")
-			}
-		})
-	}
-}
-
-func TestGetAddressState(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	randomXmss := xmss.NewXMSSFromHeight(10, 0)
-	randomXmssPK := randomXmss.GetPK()
-
-	validatorsToXMSSAddress := make(map[string][]byte)
-	validatorsToXMSSAddress[hex.EncodeToString(validatorDilithiumPK[:])] = validatorXmssPK[:]
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	addressesState := make(map[string]*address.AddressState)
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	addressesState[(hex.EncodeToString(address.GetAddressStateKey(strKey[:])))] = address.NewAddressState(strKey[:], 0, 10)
-
-	serialized_address, _ := address.NewAddressState(strKey[:], 0, 10).Serialize()
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().GetFromBucket(gomock.Any(), gomock.Any()).Return(serialized_address, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Any()).AnyTimes()
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: addressesState,
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: validatorsToXMSSAddress,
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-
-	testCases := []struct {
-		name                 string
-		xmssPK               []byte
-		stateContext         StateContext
-		expectedError        error
-		expectedAddressState *address.AddressState
-	}{
-		{
-			name:                 "ok",
-			xmssPK:               strKey[:],
-			stateContext:         *stateContext,
-			expectedAddressState: address.NewAddressState(strKey[:], 0, 10),
-			expectedError:        nil,
-		},
-		{
-			name:                 "address does not exist",
-			xmssPK:               randomXmssPK[:],
-			stateContext:         *stateContext,
-			expectedAddressState: nil,
-			expectedError:        fmt.Errorf("address %s not found in addressesState", hex.EncodeToString(randomXmssPK[:])),
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			addressState, err := tc.stateContext.GetAddressState(hex.EncodeToString(tc.xmssPK))
-
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-			if err == nil && (string(addressState.Address()) != string(tc.expectedAddressState.Address())) {
-				t.Errorf("expected addressState addresses does not match")
-			}
-
-			if err == nil && (addressState.Balance() != tc.expectedAddressState.Balance()) {
-				t.Errorf("expected addressState balance does not match")
-			}
-		})
-	}
-}
-
-func TestGetAddressStateByPK(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	validatorsToXMSSAddress := make(map[string][]byte)
-	validatorsToXMSSAddress[hex.EncodeToString(validatorDilithiumPK[:])] = validatorXmssPK[:]
-
-	addressesState := make(map[string]*address.AddressState)
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	addressesState[(hex.EncodeToString(address.GetAddressStateKey(strKey[:])))] = address.NewAddressState(strKey[:], 0, 10)
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	serialized_address, _ := address.NewAddressState(strKey[:], 0, 10).Serialize()
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().GetFromBucket(gomock.Any(), gomock.Any()).Return(serialized_address, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Any()).AnyTimes()
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: addressesState,
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: validatorsToXMSSAddress,
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name                 string
-		xmssPK               []byte
-		stateContext         StateContext
-		expectedError        error
-		expectedAddressState *address.AddressState
-	}{
-		{
-			name:                 "ok",
-			xmssPK:               validatorXmssPK[:],
-			stateContext:         *stateContext,
-			expectedAddressState: address.NewAddressState(strKey[:], 0, 10),
-			expectedError:        nil,
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			addressState, err := tc.stateContext.GetAddressStateByPK(tc.xmssPK)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-			if err == nil && (string(addressState.Address()) != string(tc.expectedAddressState.Address())) {
-				t.Errorf("expected addressState addresses does not match")
-			}
-
-			if err == nil && (addressState.Balance() != tc.expectedAddressState.Balance()) {
-				t.Errorf("expected addressState balance does not match")
-			}
-		})
-	}
-}
-
-func TestPrepareValidatorsToXMSSAddress(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	dilithiumMetadata, _ := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false).Serialize()
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: &metadata.MainChainMetaData{},
-	}
-
-	testCases := []struct {
-		name          string
-		dilithiumPK   []byte
-		stateContext  StateContext
-		buildStubs    func(store *mockdb.MockDB)
-		expectedError error
-	}{
-		{
-			name:         "ok",
-			dilithiumPK:  validatorDilithiumPK[:],
-			stateContext: *stateContext,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(dilithiumMetadata, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.PrepareValidatorsToXMSSAddress(tc.dilithiumPK)
-
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-		})
-	}
-}
-
-func TestPrepareDilithiumMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	dilithiumMetadata, _ := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false).Serialize()
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name          string
-		dilithiumPK   []byte
-		stateContext  StateContext
-		buildStubs    func(store *mockdb.MockDB)
-		expectedError error
-	}{
-		{
-			name:         "ok",
-			dilithiumPK:  validatorDilithiumPK[:],
-			stateContext: *stateContext,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(dilithiumMetadata, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.PrepareDilithiumMetaData(hex.EncodeToString(tc.dilithiumPK))
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-			if err == nil && (string(tc.stateContext.dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(tc.dilithiumPK))].Address()) != string(validatorXmssPK[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestAddDilithiumMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorDilithium2 := dilithium.New()
-	validatorDilithiumPK2 := validatorDilithium2.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	dilithiumMetadata := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false)
-	dilithiumMetadataSerialized, _ := dilithiumMetadata.Serialize()
-	dilithiumMetadata2 := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK2[:], validatorXmssPK[:], false)
-	dilithiumMetadata2Serialized, _ := dilithiumMetadata2.Serialize()
-	dilithiumState := make(map[string]*metadata.DilithiumMetaData)
-	dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorDilithiumPK2[:]))] = dilithiumMetadata2
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: dilithiumState,
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name              string
-		dilithiumPK       []byte
-		stateContext      StateContext
-		dilithiumMetadata *metadata.DilithiumMetaData
-		buildStubs        func(store *mockdb.MockDB)
-		expectedError     error
-	}{
-		{
-			name:              "ok",
-			dilithiumPK:       validatorDilithiumPK[:],
-			stateContext:      *stateContext,
-			dilithiumMetadata: dilithiumMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(dilithiumMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-		{
-			name:              "meta data already exists",
-			dilithiumPK:       validatorDilithiumPK2[:],
-			stateContext:      *stateContext,
-			dilithiumMetadata: dilithiumMetadata2,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK2[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(dilithiumMetadata2Serialized, nil).AnyTimes()
-			},
-			expectedError: errors.New("dilithiumPK already exists"),
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.AddDilithiumMetaData(hex.EncodeToString(tc.dilithiumPK), tc.dilithiumMetadata)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-
-			if err == nil && (string(tc.stateContext.dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(tc.dilithiumPK))].Address()) != string(validatorXmssPK[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestGetDilithiumState(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	dilithiumMetadata := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false)
-	dilithiumState := make(map[string]*metadata.DilithiumMetaData)
-	dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorDilithiumPK[:]))] = dilithiumMetadata
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: dilithiumState,
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name          string
-		dilithiumPK   []byte
-		stateContext  StateContext
-		expectedError error
-	}{
-		{
-			name:          "ok",
-			dilithiumPK:   validatorDilithiumPK[:],
-			stateContext:  *stateContext,
-			expectedError: nil,
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			dilithiumstate := tc.stateContext.GetDilithiumState(hex.EncodeToString(tc.dilithiumPK))
-
-			if string(dilithiumstate.Address()) != string(validatorXmssPK[:]) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestPrepareSlaveMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	slaveXmss := xmss.NewXMSSFromHeight(4, 0)
-	slaveXmssPK := slaveXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	slaveMetadata := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), strKey[:], slaveXmssPK[:])
-	slaveMetadataSerialized, _ := slaveMetadata.Serialize()
-
-	slaveState := make(map[string]*metadata.SlaveMetaData)
-	slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:]))] = slaveMetadata
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name          string
-		masterAddr    string
-		slaveXmssPK   string
-		stateContext  StateContext
-		slaveMetadata *metadata.SlaveMetaData
-		buildStubs    func(store *mockdb.MockDB)
-		expectedError error
-	}{
-		{
-			name:          "ok",
-			masterAddr:    hex.EncodeToString(strKey[:]),
-			slaveXmssPK:   hex.EncodeToString(slaveXmssPK[:]),
-			stateContext:  *stateContext,
-			slaveMetadata: slaveMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(slaveMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.PrepareSlaveMetaData(tc.masterAddr, tc.slaveXmssPK)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-			slaveXmssPKBin, _ := hex.DecodeString(tc.slaveXmssPK)
-			masterAddrBin, _ := hex.DecodeString(tc.masterAddr)
-			if err == nil && (string(tc.stateContext.slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(masterAddrBin, slaveXmssPKBin))].SlavePK()) != string(slaveXmssPK[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestAddSlaveMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	slaveXmss := xmss.NewXMSSFromHeight(4, 0)
-	slaveXmssPK := slaveXmss.GetPK()
-
-	slaveXmss2 := xmss.NewXMSSFromHeight(4, 0)
-	slaveXmssPK2 := slaveXmss2.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	slaveMetadata := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), strKey[:], slaveXmssPK[:])
-	slaveMetadataSerialized, _ := slaveMetadata.Serialize()
-
-	slaveMetadata2 := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), strKey[:], slaveXmssPK[:])
-	slaveMetadataSerialized2, _ := slaveMetadata2.Serialize()
-
-	slaveState := make(map[string]*metadata.SlaveMetaData)
-	slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK2[:]))] = slaveMetadata2
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name          string
-		masterAddr    string
-		slaveXmssPK   string
-		stateContext  StateContext
-		slaveMetadata *metadata.SlaveMetaData
-		buildStubs    func(store *mockdb.MockDB)
-		expectedError error
-	}{
-		{
-			name:          "ok",
-			masterAddr:    hex.EncodeToString(strKey[:]),
-			slaveXmssPK:   hex.EncodeToString(slaveXmssPK[:]),
-			stateContext:  *stateContext,
-			slaveMetadata: slaveMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(slaveMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-		{
-			name:          "slave metadata already exists",
-			masterAddr:    hex.EncodeToString(strKey[:]),
-			slaveXmssPK:   hex.EncodeToString(slaveXmssPK[:]),
-			stateContext:  *stateContext,
-			slaveMetadata: slaveMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK2[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(slaveMetadataSerialized2, nil).AnyTimes()
-			},
-			expectedError: errors.New("SlaveMetaData already exists"),
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.AddSlaveMetaData(tc.masterAddr, tc.slaveXmssPK, tc.slaveMetadata)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-			slaveXmssPKBin, _ := hex.DecodeString(tc.slaveXmssPK)
-			masterAddrBin, _ := hex.DecodeString(tc.masterAddr)
-			if err == nil && (string(tc.stateContext.slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(masterAddrBin, slaveXmssPKBin))].SlavePK()) != string(slaveXmssPKBin[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestGetSlaveState(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	slaveXmss := xmss.NewXMSSFromHeight(4, 0)
-	slaveXmssPK := slaveXmss.GetPK()
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	slaveMetadata := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), strKey[:], slaveXmssPK[:])
-	slaveMetadataSerialized, _ := slaveMetadata.Serialize()
-
-	slaveState := make(map[string]*metadata.SlaveMetaData)
-	slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:]))] = slaveMetadata
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     slaveState,
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-
-	testCases := []struct {
-		name          string
-		masterAddr    string
-		slaveXmssPK   string
-		stateContext  StateContext
-		slaveMetadata *metadata.SlaveMetaData
-		buildStubs    func(store *mockdb.MockDB)
-		expectedError error
-	}{
-		{
-			name:          "ok",
-			masterAddr:    hex.EncodeToString(strKey[:]),
-			slaveXmssPK:   hex.EncodeToString(slaveXmssPK[:]),
-			stateContext:  *stateContext,
-			slaveMetadata: slaveMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(slaveMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			slavemetadata := tc.stateContext.GetSlaveState(tc.masterAddr, tc.slaveXmssPK)
-
-			slaveXmssPKBin, _ := hex.DecodeString(tc.slaveXmssPK)
-
-			if string(slavemetadata.SlavePK()) != string(slaveXmssPKBin[:]) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestPrepareOTSIndexMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	otsIndex := uint64(8192)
-	otsIndexMetadata := metadata.NewOTSIndexMetaData(strKey[:], otsIndex/config.GetDevConfig().OTSBitFieldPerPage)
-	otsIndexMetadataSerialized, _ := otsIndexMetadata.Serialize()
-	otsIndexState := make(map[string]*metadata.OTSIndexMetaData)
-	otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex))] = otsIndexMetadata
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name             string
-		address          string
-		otsIndex         uint64
-		stateContext     StateContext
-		otsIndexMetadata *metadata.OTSIndexMetaData
-		buildStubs       func(store *mockdb.MockDB)
-		expectedError    error
-	}{
-		{
-			name:             "ok",
-			address:          hex.EncodeToString(strKey[:]),
-			otsIndex:         uint64(8192),
-			stateContext:     *stateContext,
-			otsIndexMetadata: otsIndexMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(otsIndexMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.PrepareOTSIndexMetaData(tc.address, tc.otsIndex)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-			addressBin, _ := hex.DecodeString(tc.address)
-
-			if err == nil && (string(tc.stateContext.otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(addressBin, tc.otsIndex))].Address()) != string(addressBin[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestAddOTSIndexMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	otsIndex := uint64(8192)
-	otsIndex2 := uint64(8192 * 2)
-	otsIndexMetadata := metadata.NewOTSIndexMetaData(strKey[:], otsIndex/config.GetDevConfig().OTSBitFieldPerPage)
-	otsIndexMetadataSerialized, _ := otsIndexMetadata.Serialize()
-	otsIndexMetadata2 := metadata.NewOTSIndexMetaData(strKey[:], otsIndex2/config.GetDevConfig().OTSBitFieldPerPage)
-	otsIndexState := make(map[string]*metadata.OTSIndexMetaData)
-	otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex))] = otsIndexMetadata2
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name             string
-		address          string
-		otsIndex         uint64
-		stateContext     StateContext
-		otsIndexMetadata *metadata.OTSIndexMetaData
-		buildStubs       func(store *mockdb.MockDB)
-		expectedError    error
-	}{
-		{
-			name:             "ok",
-			address:          hex.EncodeToString(strKey[:]),
-			otsIndex:         uint64(8192),
-			stateContext:     *stateContext,
-			otsIndexMetadata: otsIndexMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(otsIndexMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-		{
-			name:             "ots metadata already exists",
-			address:          hex.EncodeToString(strKey[:]),
-			otsIndex:         uint64(8192 * 2),
-			stateContext:     *stateContext,
-			otsIndexMetadata: otsIndexMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(otsIndexMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: errors.New("OTSIndexMetaData already exists"),
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			err := tc.stateContext.AddOTSIndexMetaData(tc.address, tc.otsIndex, tc.otsIndexMetadata)
-			if err != nil && (err.Error() != tc.expectedError.Error()) {
-				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			}
-			addressBin, _ := hex.DecodeString(tc.address)
-
-			if err == nil && (string(tc.stateContext.otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(addressBin, tc.otsIndex))].Address()) != string(addressBin[:])) {
-				t.Errorf("expected address does not match")
-			}
-		})
-	}
-}
-
-func TestGetOTSIndexState(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-
-	store := mockdb.NewMockDB(ctrl)
-
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
-
-	otsIndex := uint64(8192)
-	otsIndexMetadata := metadata.NewOTSIndexMetaData(strKey[:], otsIndex/config.GetDevConfig().OTSBitFieldPerPage)
-	otsIndexMetadataSerialized, _ := otsIndexMetadata.Serialize()
-	otsIndexState := make(map[string]*metadata.OTSIndexMetaData)
-	otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex))] = otsIndexMetadata
-
-	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  otsIndexState,
-
-		slotNumber:              0,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
-
-		epochMetaData:     &metadata.EpochMetaData{},
-		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
-		mainChainMetaData: mainChainMetaData,
-	}
-	testCases := []struct {
-		name             string
-		address          string
-		otsIndex         uint64
-		stateContext     StateContext
-		otsIndexMetadata *metadata.OTSIndexMetaData
-		buildStubs       func(store *mockdb.MockDB)
-		expectedError    error
-	}{
-		{
-			name:             "ok",
-			address:          hex.EncodeToString(strKey[:]),
-			otsIndex:         uint64(8192),
-			stateContext:     *stateContext,
-			otsIndexMetadata: otsIndexMetadata,
-			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(otsIndexMetadataSerialized, nil).AnyTimes()
-			},
-			expectedError: nil,
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			tc.buildStubs(store)
-			otsIndexstate := tc.stateContext.GetOTSIndexState(tc.address, tc.otsIndex)
-			// if err != nil && (err.Error() != tc.expectedError.Error()) {
-			// 	t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
-			// }
-			addressBin, _ := hex.DecodeString(tc.address)
-
-			if string(otsIndexstate.Address()) != string(addressBin[:]) {
-				t.Errorf("expected address does not match")
 			}
 		})
 	}
@@ -1461,7 +258,7 @@ func TestCommit(t *testing.T) {
 
 	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
 	validatorXmssPK := validatorXmss.GetPK()
-	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
+	strKey := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((validatorXmssPK[:])))
 
 	validatorsToXMSSAddress := make(map[string][]byte)
 	validatorsToXMSSAddress[hex.EncodeToString(validatorDilithiumPK[:])] = validatorXmssPK[:]
@@ -1482,53 +279,47 @@ func TestCommit(t *testing.T) {
 	slaveXmss := xmss.NewXMSSFromHeight(4, 0)
 	slaveXmssPK := slaveXmss.GetPK()
 
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("lastBlockHeaderHash")), 0)
+	mainChainMetaData := metadata.NewMainChainMetaData(common.BytesToHash(sha256.New().Sum([]byte("finalizedBlockHeaderHash"))), 1,
+		common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderHash"))), 0)
 	addressesState := make(map[string]*address.AddressState)
 	addressesState[(hex.EncodeToString(address.GetAddressStateKey(strKey[:])))] = address.NewAddressState(strKey[:], 0, 10)
-	dilithiumMetadata := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false)
-	dilithiumMetadataSerialized, _ := dilithiumMetadata.Serialize()
-	dilithiumState := make(map[string]*metadata.DilithiumMetaData)
-	dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorDilithiumPK[:]))] = dilithiumMetadata
+	// dilithiumMetadata := metadata.NewDilithiumMetaData(sha256.New().Sum([]byte("transactionHash")), validatorDilithiumPK[:], validatorXmssPK[:], false)
+	// dilithiumMetadataSerialized, _ := dilithiumMetadata.Serialize()
+	// dilithiumState := make(map[string]*metadata.DilithiumMetaData)
+	// dilithiumState[hex.EncodeToString(metadata.GetDilithiumMetaDataKey(validatorDilithiumPK[:]))] = dilithiumMetadata
 
 	slaveMetadata := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), strKey[:], slaveXmssPK[:])
 	slaveMetadataSerialized, _ := slaveMetadata.Serialize()
 	slaveState := make(map[string]*metadata.SlaveMetaData)
 	slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:]))] = slaveMetadata
 
-	otsIndex := uint64(8192)
+	// otsIndex := uint64(8192)
 
-	otsIndexMetadata := metadata.NewOTSIndexMetaData(strKey[:], otsIndex/config.GetDevConfig().OTSBitFieldPerPage)
-	otsIndexMetadataSerialized, _ := otsIndexMetadata.Serialize()
-	otsIndexState := make(map[string]*metadata.OTSIndexMetaData)
-	otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex))] = otsIndexMetadata
+	// otsIndexMetadata := metadata.NewOTSIndexMetaData(strKey[:], otsIndex/config.GetDevConfig().OTSBitFieldPerPage)
+	// otsIndexMetadataSerialized, _ := otsIndexMetadata.Serialize()
+	// otsIndexState := make(map[string]*metadata.OTSIndexMetaData)
+	// otsIndexState[hex.EncodeToString(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex))] = otsIndexMetadata
 
 	totalStakeAmount, _ := big.NewInt(10).MarshalText()
-	parentBlockMetadata := metadata.NewBlockMetaData(sha256.New().Sum([]byte("parentsparentBlockHeaderHash")), sha256.New().Sum([]byte("parentBlockHeaderHash")), 0, totalStakeAmount)
+	parentBlockMetadata := metadata.NewBlockMetaData(common.BytesToHash(sha256.New().Sum([]byte("parentsparentBlockHeaderHash"))), common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash"))), 0, totalStakeAmount, common.Hash{})
 	parentBlockMetadataSerialized, _ := parentBlockMetadata.Serialize()
 
-	lastBlockMetadata := metadata.NewBlockMetaData(sha256.New().Sum([]byte("parentBlockHeaderHash")), sha256.New().Sum([]byte("lastBlockHeaderHash")), 0, totalStakeAmount)
+	lastBlockMetadata := metadata.NewBlockMetaData(common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash"))), common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderHash"))), 0, totalStakeAmount, common.Hash{})
 	lastBlockMetadataSerialized, _ := lastBlockMetadata.Serialize()
 
 	store := mockdb.NewMockDB(ctrl)
 
 	stateContext := &StateContext{
-		db:             store,
-		addressesState: addressesState,
-		dilithiumState: dilithiumState,
-		slaveState:     slaveState,
-		otsIndexState:  otsIndexState,
+		db: store,
 
-		slotNumber:              1,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: validatorsToXMSSAddress,
-		attestorsFlag:           attestorsFlag,
-		blockProposerFlag:       false,
+		slotNumber:                   1,
+		blockProposer:                blockProposerPK[:],
+		finalizedHeaderHash:          common.Hash(sha256.Sum256([]byte("finalizedHeaderHash"))),
+		parentBlockHeaderHash:        common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))),
+		blockHeaderHash:              common.Hash(sha256.Sum256([]byte("blockHeaderHash"))),
+		partialBlockSigningHash:      common.Hash(sha256.Sum256([]byte("partialBlockSigningHash"))),
+		blockSigningHash:             common.Hash(sha256.Sum256([]byte("blockSigningHash"))),
+		currentBlockTotalStakeAmount: big.NewInt(10),
 
 		epochMetaData:     &metadata.EpochMetaData{},
 		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
@@ -1550,18 +341,18 @@ func TestCommit(t *testing.T) {
 			isFinalizedState: false,
 			stateContext:     *stateContext,
 			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().
-					GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(dilithiumMetadataSerialized, nil).AnyTimes()
+				// store.EXPECT().
+				// 	GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
+				// 	Return(dilithiumMetadataSerialized, nil).AnyTimes()
 				store.EXPECT().
 					GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(strKey[:], slaveXmssPK[:])), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
 					Return(slaveMetadataSerialized, nil).AnyTimes()
-				store.EXPECT().
-					GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
-					Return(otsIndexMetadataSerialized, nil).AnyTimes()
+				// store.EXPECT().
+				// 	GetFromBucket(gomock.Eq(metadata.GetOTSIndexMetaDataKeyByOTSIndex(strKey[:], otsIndex)), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentBlockHeaderHash"))))))).
+				// 	Return(otsIndexMetadataSerialized, nil).AnyTimes()
 				store.EXPECT().DB().Return(db).AnyTimes()
-				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(sha256.New().Sum([]byte("parentBlockHeaderHash"))))).Return(parentBlockMetadataSerialized, nil).AnyTimes()
-				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(sha256.New().Sum([]byte("lastBlockHeaderHash"))))).Return(lastBlockMetadataSerialized, nil).AnyTimes()
+				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash")))))).Return(parentBlockMetadataSerialized, nil).AnyTimes()
+				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderHash")))))).Return(lastBlockMetadataSerialized, nil).AnyTimes()
 			},
 			expectedError: nil,
 		},
@@ -1586,7 +377,7 @@ func TestCommit(t *testing.T) {
 			if err != nil {
 				t.Error("error creating bucket", err)
 			}
-			err = tc.stateContext.Commit(tc.blockStorageKey, tc.bytesBlock, tc.isFinalizedState)
+			err = tc.stateContext.Commit(tc.blockStorageKey, tc.bytesBlock, common.Hash{}, tc.isFinalizedState)
 			if err != nil && (err.Error() != tc.expectedError.Error()) {
 				t.Errorf("expected error (%v), got error (%v)", tc.expectedError, err)
 			}
@@ -1605,36 +396,30 @@ func TestFinalize(t *testing.T) {
 	blockProposerPK := blockProposer.GetPK()
 
 	totalStakeAmount, _ := big.NewInt(10).MarshalText()
-	parentBlockMetadata := metadata.NewBlockMetaData(sha256.New().Sum([]byte("parentsparentBlockHeaderHash")), sha256.New().Sum([]byte("parentBlockHeaderHash")), 0, totalStakeAmount)
+	parentBlockMetadata := metadata.NewBlockMetaData(common.BytesToHash(sha256.New().Sum([]byte("parentsparentBlockHeaderHash"))), common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash"))), 0, totalStakeAmount, common.Hash{})
 	parentBlockMetadataSerialized, _ := parentBlockMetadata.Serialize()
 
-	lastBlockMetadata := metadata.NewBlockMetaData(sha256.New().Sum([]byte("parentBlockHeaderHash")), sha256.New().Sum([]byte("lastBlockHeaderHash")), 0, totalStakeAmount)
+	lastBlockMetadata := metadata.NewBlockMetaData(common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash"))), common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderHash"))), 0, totalStakeAmount, common.Hash{})
 	lastBlockMetadataSerialized, _ := lastBlockMetadata.Serialize()
 
 	blockMetaDataPathForFinalization := make([]*metadata.BlockMetaData, 0)
 	blockMetaDataPathForFinalization = append(blockMetaDataPathForFinalization, lastBlockMetadata)
 
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("parentBlockHeaderHash")), 0)
+	mainChainMetaData := metadata.NewMainChainMetaData(common.BytesToHash(sha256.New().Sum([]byte("finalizedBlockHeaderHash"))), 1,
+		common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash"))), 0)
 	store := mockdb.NewMockDB(ctrl)
 
 	stateContext := &StateContext{
-		db:             store,
-		addressesState: make(map[string]*address.AddressState),
-		dilithiumState: make(map[string]*metadata.DilithiumMetaData),
-		slaveState:     make(map[string]*metadata.SlaveMetaData),
-		otsIndexState:  make(map[string]*metadata.OTSIndexMetaData),
+		db: store,
 
-		slotNumber:              1,
-		blockProposer:           blockProposerPK[:],
-		finalizedHeaderHash:     sha256.New().Sum([]byte("finalizedHeaderHash")),
-		parentBlockHeaderHash:   sha256.New().Sum([]byte("parentBlockHeaderHash")),
-		blockHeaderHash:         sha256.New().Sum([]byte("blockHeaderHash")),
-		partialBlockSigningHash: sha256.New().Sum([]byte("partialBlockSigningHash")),
-		blockSigningHash:        sha256.New().Sum([]byte("blockSigningHash")),
-		validatorsToXMSSAddress: make(map[string][]byte),
-		attestorsFlag:           make(map[string]bool),
-		blockProposerFlag:       false,
+		slotNumber:                   1,
+		blockProposer:                blockProposerPK[:],
+		finalizedHeaderHash:          common.Hash(sha256.Sum256([]byte("finalizedHeaderHash"))),
+		parentBlockHeaderHash:        common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))),
+		blockHeaderHash:              common.Hash(sha256.Sum256([]byte("blockHeaderHash"))),
+		partialBlockSigningHash:      common.Hash(sha256.Sum256([]byte("partialBlockSigningHash"))),
+		blockSigningHash:             common.Hash(sha256.Sum256([]byte("blockSigningHash"))),
+		currentBlockTotalStakeAmount: big.NewInt(10),
 
 		epochMetaData:     &metadata.EpochMetaData{},
 		epochBlockHashes:  metadata.NewEpochBlockHashes(0),
@@ -1652,8 +437,8 @@ func TestFinalize(t *testing.T) {
 			blockMetaDataPathArray: blockMetaDataPathForFinalization,
 			stateContext:           *stateContext,
 			buildStubs: func(store *mockdb.MockDB) {
-				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(sha256.New().Sum([]byte("parentBlockHeaderHash"))))).Return(parentBlockMetadataSerialized, nil).AnyTimes()
-				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(sha256.New().Sum([]byte("lastBlockHeaderHash"))))).Return(lastBlockMetadataSerialized, nil).AnyTimes()
+				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(common.BytesToHash(sha256.New().Sum([]byte("parentBlockHeaderHash")))))).Return(parentBlockMetadataSerialized, nil).AnyTimes()
+				store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(common.BytesToHash(sha256.New().Sum([]byte("lastBlockHeaderHash")))))).Return(lastBlockMetadataSerialized, nil).AnyTimes()
 				store.EXPECT().DB().Return(db).AnyTimes()
 			},
 			expectedError: nil,
@@ -1705,14 +490,14 @@ func TestNewStateContext(t *testing.T) {
 	blockProposerPK := blockProposer.GetPK()
 
 	slotNumber := uint64(0)
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	parentBlockHeaderHash := sha256.New().Sum([]byte("parentBlockHeaderHash"))
-	blockHeaderHash := sha256.New().Sum([]byte("blockHeaderHash"))
-	partialBlockSigningHash := sha256.New().Sum([]byte("partialBlockSigningHash"))
-	blockSigningHash := sha256.New().Sum([]byte("blockSigningHash"))
+	finalizedHeaderHash := common.Hash(sha256.Sum256([]byte("finalizedHeaderHash")))
+	parentBlockHeaderHash := common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash")))
+	blockHeaderHash := common.Hash(sha256.Sum256([]byte("blockHeaderHash")))
+	partialBlockSigningHash := common.Hash(sha256.Sum256([]byte("partialBlockSigningHash")))
+	blockSigningHash := common.Hash(sha256.Sum256([]byte("blockSigningHash")))
 	epochMetaData := &metadata.EpochMetaData{}
-	mainChainMetaData := metadata.NewMainChainMetaData(sha256.New().Sum([]byte("finalizedBlockHeaderHash")), 1,
-		sha256.New().Sum([]byte("parentBlockHeaderHash")), 0)
+	mainChainMetaData := metadata.NewMainChainMetaData(common.Hash(sha256.Sum256([]byte("finalizedBlockHeaderHash"))), 1,
+		common.Hash(sha256.Sum256([]byte("parentBlockHeaderHash"))), 0)
 	mainChainMetaDataSerialized, _ := mainChainMetaData.Serialize()
 
 	epochBlockHashesMetadata := metadata.NewEpochBlockHashes(0)

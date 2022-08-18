@@ -1,75 +1,67 @@
 package transactions
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/theQRL/go-qrllib/dilithium"
-	"github.com/theQRL/go-qrllib/xmss"
-	"github.com/theQRL/zond/address"
-	mockdb "github.com/theQRL/zond/db/mock"
-	"github.com/theQRL/zond/metadata"
-	"github.com/theQRL/zond/misc"
+	// "github.com/golang/mock/gomock"
+	// "github.com/theQRL/go-qrllib/dilithium"
+	// "github.com/theQRL/go-qrllib/xmss"
+	// "github.com/theQRL/zond/address"
+	// mockdb "github.com/theQRL/zond/db/mock"
+	// "github.com/theQRL/zond/metadata"
+	// "github.com/theQRL/zond/misc"
+
 	"github.com/theQRL/zond/protos"
-	"github.com/theQRL/zond/state"
+	// "github.com/theQRL/zond/state"
 )
 
 func TestProtoToTransaction(t *testing.T) {
-	masterAddr, _ := hex.DecodeString("0003009cf8640426af83ccd3adbdb3d290f71245")
 	slaveXmss1PK, _ := hex.DecodeString("000300252a2b71c81fde22419c528ba09bf025f145335c307e09dec6eeed5cff391b0ded8dd1b67f234394255f5dea219289f334f49e2f237c37e78097765796064aac")
 
 	networkID := uint64(1)
-	fee := uint64(1)
+	gas := uint64(1)
+	gasPrice := uint64(1)
 	nonce := uint64(10)
 	protoTx := &protos.Transaction{
-		NetworkId:  networkID,
-		MasterAddr: masterAddr,
-		Fee:        fee,
-		Nonce:      nonce,
-		Pk:         slaveXmss1PK,
+		NetworkId: networkID,
+		Gas:       gas,
+		GasPrice:  gasPrice,
+		Nonce:     nonce,
+		Pk:        slaveXmss1PK,
 	}
 
 	_ = ProtoToTransaction(protoTx)
 }
 
 func TestGenerateTxHash(t *testing.T) {
-	masterAddr, _ := hex.DecodeString("0003009cf8640426af83ccd3adbdb3d290f71245")
-	slaveXmss1PK, _ := hex.DecodeString("000300252a2b71c81fde22419c528ba09bf025f145335c307e09dec6eeed5cff391b0ded8dd1b67f234394255f5dea219289f334f49e2f237c37e78097765796064aac")
-	var slavePKs [][]byte
+	masterXmssPK, _ := hex.DecodeString("000300252a2b71c81fde22419c528ba09bf025f145335c307e09dec6eeed5cff391b0ded8dd1b67f234394255f5dea219289f334f49e2f237c37e78097765796064aac")
 
-	addrTo1 := "000500f162cf94b30c2a6b96f46d8fba2b361fd7"
-	addrTo2 := "00060053d675755dfa7060b53854ba894abf1995"
-	var addrsTo [][]byte
-	addrsTo = append(addrsTo, []byte(addrTo1))
-	addrsTo = append(addrsTo, []byte(addrTo2))
+	addrTo := "000500f162cf94b30c2a6b96f46d8fba2b361fd7"
 
-	signingHash := sha256.New().Sum([]byte("signingHash"))
-
-	var amounts []uint64
-	amounts = append(amounts, 10)
-	amounts = append(amounts, 20)
-	fee := uint64(1)
-	message := []byte("message")
+	amount := uint64(10)
+	gas := uint64(1)
+	gasPrice := uint64(1)
 	nonce := uint64(10)
 	networkID := uint64(1)
-	transfer := NewTransfer(networkID, addrsTo, amounts, fee, slavePKs, message, nonce, slaveXmss1PK[:], masterAddr[:])
+	data := []byte("data")
+	transfer := NewTransfer(networkID, []byte(addrTo), amount, gas, gasPrice, data, nonce, masterXmssPK[:])
 
-	expectedHash, _ := hex.DecodeString("689814d068b8d57fa9783a40bd5ebfe523fe0e64d190ff2f0f73949b3fad82e7")
+	expectedHash := "0xb483dda8b28c6510695ce6856fd934ae0b4921f6b3ed22664ca779635cbaf149"
 
-	output := transfer.GenerateTxHash(signingHash)
-	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
-		t.Errorf("expected transaction hash (%v), got (%v)", hex.EncodeToString(expectedHash), hex.EncodeToString(output))
+	output := transfer.GenerateTxHash()
+	if output.String() != expectedHash {
+		t.Errorf("expected transaction hash (%v), got (%v)", expectedHash, output.String())
 	}
 }
 
+/*
 func TestValidateSlave(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	masterXmss := xmss.NewXMSSFromHeight(4, 0)
 	masterXmssPK := masterXmss.GetPK()
-	masterAddr := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((masterXmssPK[:])))
+	masterAddr := xmss.GetXMSSAddressFromPK(misc.UnSizedXMSSPKToSizedPK((masterXmssPK[:])))
 
 	slaveXmss1 := xmss.NewXMSSFromHeight(6, 0)
 	slaveXmss1PK := slaveXmss1.GetPK()
@@ -171,3 +163,4 @@ func TestValidateSlave(t *testing.T) {
 		})
 	}
 }
+*/
