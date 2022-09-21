@@ -1,25 +1,24 @@
 package p2p
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/network"
 	log "github.com/sirupsen/logrus"
+	"github.com/theQRL/zond/block"
 	"github.com/theQRL/zond/chain"
-	"github.com/theQRL/zond/chain/block"
-	"github.com/theQRL/zond/chain/transactions"
-	"github.com/theQRL/zond/chain/transactions/pool"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/metadata"
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/p2p/messages"
 	"github.com/theQRL/zond/protos"
+	"github.com/theQRL/zond/transactions"
+	"github.com/theQRL/zond/transactions/pool"
 	"github.com/willf/bloom"
 	"io"
-	"net"
 	"reflect"
 	"strconv"
 	"sync"
@@ -108,7 +107,7 @@ func newPeer(conn network.Stream, inbound bool, chain *chain.Chain,
 		mr:                          mr,
 		config:                      config.GetConfig(),
 		ntp:                         ntp.GetNTP(),
-		peerData:					 peerData,
+		peerData:                    peerData,
 		mrDataConn:                  mrDataConn,
 		registerAndBroadcastChan:    registerAndBroadcastChan,
 		blockReceivedForAttestation: blockReceivedForAttestation,
@@ -120,8 +119,8 @@ func newPeer(conn network.Stream, inbound bool, chain *chain.Chain,
 		outgoingQueue:               &PriorityQueue{},
 	}
 	p.id = p.stream.Conn().RemotePeer().Pretty()
-	ip, _, _ := net.SplitHostPort(misc.IPFromMultiAddr(p.stream.Conn().RemoteMultiaddr().String()))
-	p.ip = ip
+	p.ip = misc.IPFromMultiAddr(p.stream.Conn().RemoteMultiaddr().String())
+
 	log.Info("New Peer connected ", p.stream.Conn().RemoteMultiaddr())
 	return p
 }
@@ -200,7 +199,7 @@ func (p *Peer) SendEBHReq(epoch uint64, finalizedHeaderHash []byte) error {
 			FuncName: protos.LegacyMessage_EBHREQ,
 			Data: &protos.LegacyMessage_EpochBlockHashesRequest{
 				EpochBlockHashesRequest: &protos.EpochBlockHashesRequest{
-					Epoch: p.GetEpochToBeRequested(),
+					Epoch:               p.GetEpochToBeRequested(),
 					FinalizedHeaderHash: finalizedHeaderHash,
 				},
 			},
@@ -234,10 +233,10 @@ func (p *Peer) SendNext() error {
 	}
 
 	p.updateCounters()
-	if float32(p.outCounter) >= float32(p.config.User.Node.PeerRateLimit) * 0.9 {
+	if float32(p.outCounter) >= float32(p.config.User.Node.PeerRateLimit)*0.9 {
 		log.Info("Send Next Cancelled as",
 			"p.outcounter", p.outCounter,
-			"rate limit", float32(p.config.User.Node.PeerRateLimit) * 0.9)
+			"rate limit", float32(p.config.User.Node.PeerRateLimit)*0.9)
 		return nil
 	}
 
@@ -284,7 +283,7 @@ func (p *Peer) ReadMsg() (msg *Msg, size uint32, err error) {
 	message := &protos.LegacyMessage{}
 	err = proto.Unmarshal(buf, message)
 	msg.msg = message
-	return msg, size+4, err  // 4 Byte Added for MetaData that includes the size of actual data
+	return msg, size + 4, err // 4 Byte Added for MetaData that includes the size of actual data
 }
 
 func (p *Peer) readLoop() {
@@ -306,7 +305,7 @@ func (p *Peer) readLoop() {
 			return
 		}
 		p.inCounter += 1
-		if float32(p.inCounter) > 2.2 * float32(p.config.User.Node.PeerRateLimit) {
+		if float32(p.inCounter) > 2.2*float32(p.config.User.Node.PeerRateLimit) {
 			log.Warn("Rate Limit Hit")
 			p.Disconnect()
 			return
@@ -336,7 +335,7 @@ func (p *Peer) monitorChainState() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 	for {
-		log.Debug("Monitor Chain State running for ", p.ID())
+		log.Debug("Monitor Chain State running for ", p.IP(), " ", p.ID())
 		select {
 		case <-time.After(30 * time.Second):
 			currentTime := p.ntp.Time()
@@ -350,21 +349,22 @@ func (p *Peer) monitorChainState() {
 				log.Warn("Disconnecting Peer due to Ping Timeout",
 					" delta ", delta,
 					" currentTime ", currentTime,
-					" peer ", p.ID())
+					" peer ", p.IP(), " ", p.ID())
 				p.Disconnect()
 				return
 			}
 
 			lastBlock := p.chain.GetLastBlock()
-			lastBlockMetaData, err := p.chain.GetBlockMetaData(lastBlock.HeaderHash())
+			lastBlockMetaData, err := p.chain.GetBlockMetaData(lastBlock.Hash())
 			if err != nil {
 				log.Warn("Ping Failed Disconnecting ", p.stream.Conn().RemoteMultiaddr())
 				p.Disconnect()
 				return
 			}
+			lastBlockHash := lastBlock.Hash()
 			chainStateData := &protos.NodeChainState{
 				SlotNumber:       lastBlock.SlotNumber(),
-				HeaderHash:       lastBlock.HeaderHash(),
+				HeaderHash:       lastBlockHash[:],
 				TotalStakeAmount: lastBlockMetaData.TotalStakeAmount(),
 				Version:          p.config.Dev.Version,
 				Timestamp:        p.ntp.Time(),
@@ -386,7 +386,7 @@ func (p *Peer) monitorChainState() {
 			}
 
 			if p.chainState == nil {
-				log.Debug("Ignoring MonitorState check as peer chain state is nil for ", p.ID())
+				log.Debug("Ignoring MonitorState check as peer chain state is nil for ", p.IP(), " ", p.ID())
 				continue
 			}
 		case <-p.exitMonitorChainState:
@@ -435,6 +435,7 @@ func (p *Peer) handle(msg *Msg) error {
 			return nil
 		}
 		p.publicPort = strconv.FormatUint(uint64(msg.msg.GetPlData().PublicPort), 10)
+
 		p.multiAddr = fmt.Sprintf("/ip4/%s/tcp/%s/p2p/%s", p.ip, p.publicPort, p.stream.Conn().RemotePeer())
 		p.isPLShared = true
 		p.addPeerToPeerList <- &PeerIPWithPLData{p.multiAddr, msg.msg.GetPlData()}
@@ -473,13 +474,15 @@ func (p *Peer) handle(msg *Msg) error {
 		}
 
 		ebhReq := msg.msg.GetEpochBlockHashesRequest()
-		b, err := p.chain.GetBlock(ebhReq.FinalizedHeaderHash)
+		var finalizedHeaderHash common.Hash
+		copy(finalizedHeaderHash[:], ebhReq.FinalizedHeaderHash)
+		b, err := p.chain.GetBlock(finalizedHeaderHash)
 		if err != nil {
 			epochHeaderHashResp.IsHeaderHashFinalized = false
 		}
 
 		if b != nil && b.SlotNumber() > 0 {
-			parentBlockMetaData, err := p.chain.GetBlockMetaData(b.ParentHeaderHash())
+			parentBlockMetaData, err := p.chain.GetBlockMetaData(b.ParentHash())
 			if err != nil {
 				log.Error("Block found but parent Block MetaData not found ", err.Error())
 				return nil
@@ -503,15 +506,15 @@ func (p *Peer) handle(msg *Msg) error {
 		out := &Msg{}
 		out.msg = &protos.LegacyMessage{
 			FuncName: protos.LegacyMessage_EBHRESP,
-			Data: &protos.LegacyMessage_EpochBlockHashesResponse {
+			Data: &protos.LegacyMessage_EpochBlockHashesResponse{
 				EpochBlockHashesResponse: epochHeaderHashResp,
 			},
 		}
 		p.Send(out)
 	case protos.LegacyMessage_EBHRESP:
 		data := msg.msg.GetEpochBlockHashesResponse()
-		p.ebhRespInfo = &EBHRespInfo {
-			Data: data,
+		p.ebhRespInfo = &EBHRespInfo{
+			Data:      data,
 			Timestamp: p.ntp.Time(),
 		}
 		// store the requested headerhash
@@ -523,9 +526,10 @@ func (p *Peer) handle(msg *Msg) error {
 		// Use lock while writing the data to the variable
 	case protos.LegacyMessage_FB:
 		fbData := msg.msg.GetFbData()
-		blockHeaderHash := fbData.BlockHeaderHash
+		var blockHeaderHash common.Hash
+		copy(blockHeaderHash[:], fbData.BlockHeaderHash)
 		log.Info("Fetch Block Request",
-			" BlockHeaderHash ", hex.EncodeToString(blockHeaderHash),
+			" BlockHeaderHash ", misc.BytesToHexStr(blockHeaderHash[:]),
 			" Peer ", p.stream.Conn().RemoteMultiaddr())
 
 		b, err := p.chain.GetBlock(blockHeaderHash)
@@ -555,14 +559,14 @@ func (p *Peer) handle(msg *Msg) error {
 		b := block.BlockFromPBData(pbData.Block)
 		p.blockAndPeerChan <- &BlockAndPeer{b, p}
 
-	case protos.LegacyMessage_TT:  // Transfer Token Transaction
+	case protos.LegacyMessage_TT: // Transfer Token Transaction
 		p.HandleTransaction(msg, msg.msg.GetTtData())
-	case protos.LegacyMessage_ST:  // Slave Transaction
+	case protos.LegacyMessage_ST: // Slave Transaction
 		p.HandleTransaction(msg, msg.msg.GetStData())
-	case protos.LegacyMessage_AT:  // Attest Transaction
+	case protos.LegacyMessage_AT: // Attest Transaction
 		p.HandleAttestTransaction(msg, msg.msg.GetAtData())
 	case protos.LegacyMessage_SYNC:
-		log.Warn("SYNC has not been Implemented <<<< --- ")
+		//log.Warn("SYNC has not been Implemented <<<< --- ")
 	case protos.LegacyMessage_CHAINSTATE:
 		chainStateData := msg.msg.GetChainStateData()
 		p.HandleChainState(chainStateData)
@@ -583,15 +587,16 @@ func (p *Peer) handle(msg *Msg) error {
 
 func (p *Peer) HandleBlockForAttestation(pbBlock *protos.Block, signature []byte) {
 	b := block.BlockFromPBData(pbBlock)
-	if !p.mr.IsRequested(b.PartialBlockSigningHash(), p) {
-		log.Error("Unrequested Block Received for Attestation from ", p.ID(),
+	partialBlockSigningHash := b.PartialBlockSigningHash()
+	if !p.mr.IsRequested(partialBlockSigningHash, p) {
+		log.Error("Unrequested Block Received for Attestation from ", p.IP(), " ", p.ID(),
 			" #", b.SlotNumber(),
-			" PartialBlockSigningHash ", hex.EncodeToString(b.PartialBlockSigningHash()))
+			" PartialBlockSigningHash ", misc.BytesToHexStr(partialBlockSigningHash[:]))
 		return
 	}
-	log.Info("Received Block for Attestation from ", p.ID(),
+	log.Info("Received Block for Attestation from ", p.IP(), " ", p.ID(),
 		" #", b.SlotNumber(),
-		" PartialBlockSigningHash ", hex.EncodeToString(b.PartialBlockSigningHash()))
+		" PartialBlockSigningHash ", misc.BytesToHexStr(partialBlockSigningHash[:]))
 
 	// TODO: Add Block Validation
 
@@ -600,36 +605,42 @@ func (p *Peer) HandleBlockForAttestation(pbBlock *protos.Block, signature []byte
 			FuncName: protos.LegacyMessage_BA,
 			Data: &protos.LegacyMessage_BlockForAttestation{
 				BlockForAttestation: &protos.BlockForAttestation{
-					Block: b.PBData(),
+					Block:     b.PBData(),
 					Signature: signature,
 				},
 			},
 		},
-		MsgHash: hex.EncodeToString(b.PartialBlockSigningHash()),
+		MsgHash: misc.BytesToHexStr(partialBlockSigningHash[:]),
 	}
-	p.registerAndBroadcastChan <-msg
+	p.registerAndBroadcastChan <- msg
 
-	p.blockReceivedForAttestation <-b
+	p.blockReceivedForAttestation <- b
 
 }
 
 func (p *Peer) HandleBlock(pbBlock *protos.Block) {
 	// TODO: Validate Message
 	b := block.BlockFromPBData(pbBlock)
-	if !p.mr.IsRequested(b.HeaderHash(), p) {
-		log.Error("Unrequested Block Received from ", p.ID()," #", b.SlotNumber(), " ",
-			hex.EncodeToString(b.HeaderHash()))
+	hash := b.Hash()
+	expectedHash := block.ComputeBlockHash(b)
+	if hash != expectedHash {
+		log.Error("Invalid block hash", "Expected hash", expectedHash, "Found hash", hash, "Block #", b.SlotNumber())
 		return
 	}
-	log.Info("Received Block from ", p.ID()," #", b.SlotNumber(), " ",
-		hex.EncodeToString(b.HeaderHash()))
+	if !p.mr.IsRequested(b.Hash(), p) {
+		log.Error("Unrequested Block Received from ", p.IP(), " ", p.ID(), " #", b.SlotNumber(), " ",
+			misc.BytesToHexStr(hash[:]))
+		return
+	}
+	log.Info("Received Block from ", p.IP(), " ", p.ID(), " #", b.SlotNumber(), " ",
+		misc.BytesToHexStr(hash[:]))
 
 	if !p.chain.AddBlock(b) {
 		log.Warn("Failed To Add Block")
 		return
 	}
 
-	msg := &protos.LegacyMessage {
+	msg := &protos.LegacyMessage{
 		Data: &protos.LegacyMessage_Block{
 			Block: b.PBData(),
 		},
@@ -637,42 +648,33 @@ func (p *Peer) HandleBlock(pbBlock *protos.Block) {
 	}
 
 	registerMessage := &messages.RegisterMessage{
-		MsgHash: hex.EncodeToString(b.HeaderHash()),
-		Msg: msg,
+		MsgHash: misc.BytesToHexStr(hash[:]),
+		Msg:     msg,
 	}
 
 	select {
 	case p.registerAndBroadcastChan <- registerMessage:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		log.Warn("[HandleBlock] RegisterAndBroadcastChan Timeout ",
-			p.ID())
+			p.IP(), " ", p.ID())
 	}
 }
 
 func (p *Peer) HandleTransaction(msg *Msg, txData *protos.Transaction) error {
 	tx := transactions.ProtoToTransaction(txData)
-	txHash := tx.TxHash(tx.GetSigningHash())
+	txHash := tx.Hash()
 
 	if !p.mr.IsRequested(txHash, p) {
 		log.Warn("[HandleTransaction] Received Unrequested txn ",
-			" Peer", p.ID(),
-			" Tx Hash", hex.EncodeToString(txHash))
+			" Peer", p.IP(), " ", p.ID(),
+			" Tx Hash", misc.BytesToHexStr(txHash[:]))
 		return nil
 	}
 
-	stateContext, err := p.chain.GetStateContext()
-	if err != nil {
-		log.Error("[HandleTransaction] Error getting StateContext")
+	if err := p.chain.ValidateTransaction(txData); err != nil {
 		return nil
 	}
-	if err := tx.SetAffectedAddress(stateContext); err != nil {
-		log.Error("[HandleTransaction] Error setting affected address StateContext")
-		return nil
-	}
-	if !tx.Validate(stateContext) {
-		return nil
-	}
-	err = p.txPool.Add(tx, txHash, p.chain.GetLastBlock().SlotNumber(), p.ntp.Time())
+	err := p.txPool.Add(tx, txHash, p.chain.GetLastBlock().SlotNumber(), p.ntp.Time())
 	if err != nil {
 		log.Error("Error while adding TransferTxn into TxPool",
 			"Txhash", txHash,
@@ -680,19 +682,19 @@ func (p *Peer) HandleTransaction(msg *Msg, txData *protos.Transaction) error {
 		return err
 	}
 
-	msg2 := &protos.LegacyMessage {
+	msg2 := &protos.LegacyMessage{
 		FuncName: msg.msg.FuncName,
-		Data: msg.msg.Data,
+		Data:     msg.msg.Data,
 	}
 	registerMessage := &messages.RegisterMessage{
-		MsgHash:hex.EncodeToString(txHash),
-		Msg:msg2,
+		MsgHash: misc.BytesToHexStr(txHash[:]),
+		Msg:     msg2,
 	}
 	select {
 	case p.registerAndBroadcastChan <- registerMessage:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		log.Warn("[TX] RegisterAndBroadcastChan Timeout ",
-			p.ID())
+			p.IP(), " ", p.ID())
 	}
 	return nil
 }
@@ -700,46 +702,53 @@ func (p *Peer) HandleTransaction(msg *Msg, txData *protos.Transaction) error {
 func (p *Peer) HandleAttestTransaction(msg *Msg, txData *protos.ProtocolTransactionData) error {
 	pbData := txData.Tx
 	tx := transactions.ProtoToProtocolTransaction(pbData)
-	txHash := tx.TxHash(tx.GetSigningHash(txData.PartialBlockSigningHash))
+	var partialBlockSigningHash common.Hash
+	copy(partialBlockSigningHash[:], txData.PartialBlockSigningHash)
+	txHash := tx.TxHash(tx.GetSigningHash(partialBlockSigningHash))
 
 	if !p.mr.IsRequested(txHash, p) {
 		log.Warn("[HandleAttestTransaction] Received Unrequested txn",
-			" Peer", p.ID(),
-			" Tx Hash", hex.EncodeToString(txHash))
+			" Peer", p.IP(), " ", p.ID(),
+			" Tx Hash", misc.BytesToHexStr(txHash[:]))
 		return nil
 	}
 
-	stateContext, err := p.chain.GetStateContext2(txData.SlotNumber,
-		txData.BlockProposer,
-		txData.ParentHeaderHash,
-		txData.PartialBlockSigningHash)
+	var parentBlockHash common.Hash
+	copy(parentBlockHash[:], txData.ParentHeaderHash)
+
+	parentMetaData, err := p.chain.GetBlockMetaData(parentBlockHash)
 	if err != nil {
-		log.Error("[HandleAttestTransaction] Error getting StateContext")
-		return err
+		log.Warn("failed to get parent block metadata",
+			" Peer", p.IP(), " ", p.ID(),
+			" Tx Hash", misc.BytesToHexStr(txHash[:]))
+		return nil
 	}
-	stateContext.SetPartialBlockSigningHash(txData.PartialBlockSigningHash)
-	if err := tx.SetAffectedAddress(stateContext); err != nil {
-		log.Error("[HandleAttestTransaction] Failed to load ")
+
+	slotValidatorsMetaData, err := p.chain.GetSlotValidatorsMetaDataBySlotNumber(parentMetaData.TrieRoot(), txData.SlotNumber, parentBlockHash)
+	if err != nil {
+		log.Error("Error getting validators type")
+		return nil
 	}
-	if !tx.Validate(stateContext) {
-		log.Error("[HandleAttestTransaction] Attest Transaction Validation Failed")
+
+	if err := p.chain.ValidateAttestTransaction(pbData, slotValidatorsMetaData, partialBlockSigningHash, txData.SlotNumber, parentMetaData.SlotNumber()); err != nil {
+		log.Error("[HandleAttestTransaction] Attest Transaction Validation Failed ", err)
 		return nil
 	}
 	p.attestationReceivedForBlock <- tx.(*transactions.Attest)
 
-	msg2 := &protos.LegacyMessage {
+	msg2 := &protos.LegacyMessage{
 		FuncName: msg.msg.FuncName,
-		Data: msg.msg.Data,
+		Data:     msg.msg.Data,
 	}
 	registerMessage := &messages.RegisterMessage{
-		MsgHash:hex.EncodeToString(txHash),
-		Msg:msg2,
+		MsgHash: misc.BytesToHexStr(txHash[:]),
+		Msg:     msg2,
 	}
 	select {
 	case p.registerAndBroadcastChan <- registerMessage:
 	case <-time.After(10 * time.Second):
 		log.Warn("[AT] RegisterAndBroadcastChan Timeout ",
-			p.ID())
+			p.IP(), " ", p.ID())
 	}
 	return nil
 }
@@ -749,13 +758,13 @@ func (p *Peer) HandleChainState(nodeChainState *protos.NodeChainState) {
 	p.chainState.Timestamp = p.ntp.Time()
 }
 
-func (p *Peer) SendFetchBlock(blockHeaderHash []byte) error {
+func (p *Peer) SendFetchBlock(blockHeaderHash common.Hash) error {
 	log.Info("Fetching",
-		" Block ", hex.EncodeToString(blockHeaderHash),
+		" Block ", misc.BytesToHexStr(blockHeaderHash[:]),
 		" Peer ", p.stream.Conn().RemoteMultiaddr())
 	out := &Msg{}
 	fbData := &protos.FBData{
-		BlockHeaderHash: blockHeaderHash,
+		BlockHeaderHash: blockHeaderHash[:],
 	}
 	out.msg = &protos.LegacyMessage{
 		FuncName: protos.LegacyMessage_FB,
@@ -770,7 +779,7 @@ func (p *Peer) SendPeerList() {
 	peerList := p.peerData.PeerList()
 	out := &Msg{}
 	plData := &protos.PLData{
-		PeerIps: peerList,
+		PeerIps:    peerList,
 		PublicPort: uint32(config.GetUserConfig().Node.PublicPort),
 	}
 	out.msg = &protos.LegacyMessage{
@@ -785,9 +794,9 @@ func (p *Peer) SendPeerList() {
 func (p *Peer) SendVersion() {
 	out := &Msg{}
 	veData := &protos.VEData{
-		Version:p.config.Dev.Version,
-		GenesisPrevHash:p.config.Dev.Genesis.GenesisPrevHeaderHash,
-		RateLimit:p.config.User.Node.PeerRateLimit,
+		Version:         p.config.Dev.Version,
+		GenesisPrevHash: p.config.Dev.Genesis.GenesisPrevHeaderHash[:],
+		RateLimit:       p.config.User.Node.PeerRateLimit,
 	}
 	out.msg = &protos.LegacyMessage{
 		FuncName: protos.LegacyMessage_PL,
@@ -826,7 +835,7 @@ func (p *Peer) run() (remoteRequested bool) {
 loop:
 	for {
 		select {
-		case <- p.disconnectReason:
+		case <-p.disconnectReason:
 			break loop
 		}
 	}

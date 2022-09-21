@@ -1,13 +1,14 @@
 package metadata
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
 	"github.com/theQRL/zond/db"
+	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
 	"go.etcd.io/bbolt"
 )
@@ -16,8 +17,10 @@ type BlockMetaData struct {
 	pbData *protos.BlockMetaData
 }
 
-func (bm *BlockMetaData) ParentHeaderHash() []byte {
-	return bm.pbData.ParentHeaderHash
+func (bm *BlockMetaData) ParentHeaderHash() common.Hash {
+	var parentHeaderHash common.Hash
+	copy(parentHeaderHash[:], bm.pbData.ParentHeaderHash)
+	return parentHeaderHash
 }
 
 func (bm *BlockMetaData) ChildHeaderHashes() [][]byte {
@@ -28,8 +31,10 @@ func (bm *BlockMetaData) FinalizedChildHeaderHash() []byte {
 	return bm.pbData.FinalizedChildHeaderHash
 }
 
-func (bm *BlockMetaData) HeaderHash() []byte {
-	return bm.pbData.HeaderHash
+func (bm *BlockMetaData) HeaderHash() common.Hash {
+	var headerHash common.Hash
+	copy(headerHash[:], bm.pbData.HeaderHash)
+	return headerHash
 }
 
 func (bm *BlockMetaData) SlotNumber() uint64 {
@@ -44,6 +49,12 @@ func (bm *BlockMetaData) Epoch() uint64 {
 	return bm.pbData.SlotNumber / config.GetDevConfig().BlocksPerEpoch
 }
 
+func (bm *BlockMetaData) TrieRoot() common.Hash {
+	var root common.Hash
+	copy(root[:], bm.pbData.TrieRoot)
+	return root
+}
+
 func (bm *BlockMetaData) Serialize() ([]byte, error) {
 	return proto.Marshal(bm.pbData)
 }
@@ -52,13 +63,13 @@ func (bm *BlockMetaData) DeSerialize(data []byte) error {
 	return proto.Unmarshal(data, bm.pbData)
 }
 
-func (bm *BlockMetaData) AddChildHeaderHash(headerHash []byte) {
+func (bm *BlockMetaData) AddChildHeaderHash(headerHash common.Hash) {
 	bm.pbData.ChildHeaderHashes = append(bm.pbData.ChildHeaderHashes,
-		headerHash)
+		headerHash[:])
 }
 
-func (bm *BlockMetaData) UpdateFinalizedChildHeaderHash(finalizedChildHeaderHash []byte) {
-	bm.pbData.FinalizedChildHeaderHash = finalizedChildHeaderHash
+func (bm *BlockMetaData) UpdateFinalizedChildHeaderHash(finalizedChildHeaderHash common.Hash) {
+	bm.pbData.FinalizedChildHeaderHash = finalizedChildHeaderHash[:]
 }
 
 func (bm *BlockMetaData) Commit(b *bbolt.Bucket) error {
@@ -69,20 +80,21 @@ func (bm *BlockMetaData) Commit(b *bbolt.Bucket) error {
 	return b.Put(GetBlockMetaDataKey(bm.HeaderHash()), data)
 }
 
-func NewBlockMetaData(parentHeaderHash []byte, headerHash []byte,
-	slotNumber uint64, totalStakeAmount []byte) *BlockMetaData {
+func NewBlockMetaData(parentHeaderHash common.Hash, headerHash common.Hash,
+	slotNumber uint64, totalStakeAmount []byte, trieRoot common.Hash) *BlockMetaData {
 	pbData := &protos.BlockMetaData{
-		ParentHeaderHash: parentHeaderHash,
-		HeaderHash:       headerHash,
+		ParentHeaderHash: parentHeaderHash[:],
+		HeaderHash:       headerHash[:],
 		SlotNumber:       slotNumber,
 		TotalStakeAmount: totalStakeAmount,
+		TrieRoot:         trieRoot[:],
 	}
 	return &BlockMetaData{
 		pbData: pbData,
 	}
 }
 
-func GetBlockMetaData(d db.DB, headerHash []byte) (*BlockMetaData, error) {
+func GetBlockMetaData(d *db.DB, headerHash common.Hash) (*BlockMetaData, error) {
 	key := GetBlockMetaDataKey(headerHash)
 
 	data, err := d.Get(key)
@@ -96,10 +108,10 @@ func GetBlockMetaData(d db.DB, headerHash []byte) (*BlockMetaData, error) {
 	return bm, bm.DeSerialize(data)
 }
 
-func GetBlockMetaDataKey(headerHash []byte) []byte {
-	return []byte(fmt.Sprintf("BLOCK-META-DATA-%s", hex.EncodeToString(headerHash)))
+func GetBlockMetaDataKey(headerHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("BLOCK-META-DATA-%s", misc.BytesToHexStr(headerHash[:])))
 }
 
-func GetBlockBucketName(blockHeaderHash []byte) []byte {
-	return []byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(blockHeaderHash)))
+func GetBlockBucketName(blockHeaderHash common.Hash) []byte {
+	return []byte(fmt.Sprintf("BLOCK-BUCKET-%s", misc.BytesToHexStr(blockHeaderHash[:])))
 }

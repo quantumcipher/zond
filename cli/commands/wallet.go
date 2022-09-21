@@ -15,15 +15,27 @@ func getWalletSubCommands() []*cli.Command {
 	}
 	return []*cli.Command{
 		{
-			Name:  "add",
+			Name:  "add-xmss",
 			Usage: "Adds a new XMSS address into the Wallet",
 			Flags: []cli.Flag{
 				heightFlag,
 			},
 			Action: func(c *cli.Context) error {
 				hashType := xmss.SHA2_256
-				w := wallet.NewWallet(flags.WalletFile.Value)
-				w.Add(uint8(heightFlag.Value), hashType)
+				w := wallet.NewWallet(c.String(flags.WalletFile.Name))
+				w.AddXMSS(uint8(heightFlag.Value), hashType)
+
+				fmt.Println("Wallet Created")
+				return nil
+			},
+		},
+		{
+			Name:  "add-dilithium",
+			Usage: "Adds a new Dilithium address into the Wallet",
+			Flags: []cli.Flag{},
+			Action: func(c *cli.Context) error {
+				w := wallet.NewWallet(c.String(flags.WalletFile.Name))
+				w.AddDilithium()
 
 				fmt.Println("Wallet Created")
 				return nil
@@ -33,7 +45,7 @@ func getWalletSubCommands() []*cli.Command {
 			Name:  "list",
 			Usage: "List all addresses in a Wallet",
 			Action: func(c *cli.Context) error {
-				w := wallet.NewWallet(flags.WalletFile.Value)
+				w := wallet.NewWallet(c.String(flags.WalletFile.Name))
 				w.List()
 				return nil
 			},
@@ -42,7 +54,7 @@ func getWalletSubCommands() []*cli.Command {
 			Name:  "secret",
 			Usage: "Show hexseed & mnemonic for the addresses in Wallet",
 			Action: func(c *cli.Context) error {
-				w := wallet.NewWallet(flags.WalletFile.Value)
+				w := wallet.NewWallet(c.String(flags.WalletFile.Name))
 				w.Secret()
 				return nil
 			},

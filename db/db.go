@@ -3,11 +3,12 @@ package db
 import (
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"go.etcd.io/bbolt"
 	"path"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"go.etcd.io/bbolt"
 )
 
 type DB interface {
@@ -34,7 +35,7 @@ func NewDB(directory string, filename string) (*BoultDB, error) {
 		return nil, err
 	}
 	err = db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("DB"))  // TODO: Move this Bucket name to appropriate place
+		_, err := tx.CreateBucketIfNotExists([]byte("DB")) // TODO: Move this Bucket name to appropriate place
 		if err != nil {
 			return fmt.Errorf("could not create DB %v", err)
 		}
@@ -43,7 +44,7 @@ func NewDB(directory string, filename string) (*BoultDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BoultDB {
+	return &DB{
 		filename: filename,
 		db:       db,
 	}, nil
@@ -98,7 +99,6 @@ func (db *BoultDB) Close() {
 	} else {
 		log.Error("Failed to close BoltDB", "err", err)
 	}
-
 }
 
 func (db *BoultDB) DB() *bbolt.DB {

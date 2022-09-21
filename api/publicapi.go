@@ -1,14 +1,16 @@
 package api
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
+	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/api/view"
 	"github.com/theQRL/zond/chain"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
+	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/p2p/messages"
 	"github.com/theQRL/zond/protos"
@@ -43,7 +45,7 @@ type PublicAPIServer struct {
 	registerAndBroadcastChan chan *messages.RegisterMessage
 }
 
-func (p *PublicAPIServer) Start() error {
+func (p *PublicAPIServer) Start() {
 	c := config.GetConfig()
 
 	router := mux.NewRouter()
@@ -57,11 +59,12 @@ func (p *PublicAPIServer) Start() error {
 	router.HandleFunc("/api/broadcast/transfer", p.BroadcastTransferTx).Methods("POST")
 	router.HandleFunc("/api/broadcast/stake", p.BroadcastStakeTx).Methods("POST")
 	router.HandleFunc("/api/height", p.GetHeight).Methods("GET")
+	router.HandleFunc("/api/evmcall", p.EVMCall).Methods("POST")
 	//handler := cors.Default().Handler(router)
 	co := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"}, //you service is available and allowed for this base url
+		AllowedOrigins: []string{"*"}, // service is available and allowed for this base url
 		AllowedMethods: []string{
-			http.MethodGet,//http methods for your app
+			http.MethodGet, //http methods for your app
 			http.MethodPost,
 			http.MethodPut,
 			http.MethodPatch,
@@ -74,23 +77,19 @@ func (p *PublicAPIServer) Start() error {
 		},
 
 		AllowedHeaders: []string{
-			"*",//or you can your header key values which you are using in your application
+			"*", //or you can your header key values which you are using in your application
 
 		},
 	})
 	router.StrictSlash(false)
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", c.User.API.PublicAPI.Host, c.User.API.PublicAPI.Port), co.Handler(router))
-	if err != nil {
-
-	}
-	return nil
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", c.User.API.PublicAPI.Host, c.User.API.PublicAPI.Port), co.Handler(router)))
 }
 
 func (p *PublicAPIServer) prepareResponse(errorCode uint, errorMessage string, data interface{}) *Response {
 	r := &Response{
-		Error: errorCode,
+		Error:        errorCode,
 		ErrorMessage: errorMessage,
-		Data: data,
+		Data:         data,
 	}
 	return r
 }
@@ -110,7 +109,7 @@ func (p *PublicAPIServer) GetVersion(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(429)
 		return
 	}
-	fmt.Println("Get version called");
+	fmt.Println("Get version called")
 	getVersionResponse := &GetVersionResponse{
 		Version: p.config.Dev.Version,
 	}
@@ -131,7 +130,10 @@ func (p *PublicAPIServer) GetBlockByHash(w http.ResponseWriter, r *http.Request)
 			nil))
 		return
 	}
-	headerHash, err := hex.DecodeString(hash)
+	binData, err := misc.HexStrToBytes(hash)
+	var headerHash common.Hash
+	copy(headerHash[:], binData)
+
 	if err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
 			fmt.Sprintf("Error Decoding headerHash\n %s", err.Error()),
@@ -146,7 +148,7 @@ func (p *PublicAPIServer) GetBlockByHash(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	response := &view.PlainBlock{}
-	response.BlockFromPBData(b.PBData(), b.HeaderHash())
+	response.BlockFromPBData(b.PBData(), b.Hash())
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
@@ -161,7 +163,7 @@ func (p *PublicAPIServer) GetLastBlock(w http.ResponseWriter, r *http.Request) {
 	b := p.chain.GetLastBlock()
 
 	response := &view.PlainBlock{}
-	response.BlockFromPBData(b.PBData(), b.HeaderHash())
+	response.BlockFromPBData(b.PBData(), b.Hash())
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
@@ -175,22 +177,30 @@ func (p *PublicAPIServer) GetAddressState(w http.ResponseWriter, r *http.Request
 	}
 	vars := mux.Vars(r)
 	address := vars["address"]
-	binAddress, err := hex.DecodeString(address)
+	binData, err := misc.HexStrToBytes(address)
 	if err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
 			fmt.Sprintf("Error Decoding address %s\n %s", address, err.Error()),
 			nil))
 		return
 	}
-	addressState, err := p.chain.GetAddressState(binAddress)
+
+	var binAddress common.Address
+	copy(binAddress[:], binData)
+
+	statedb, err := p.chain.AccountDB()
 	if err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			fmt.Sprintf("Error loading address State %s\n %s", address, err.Error()),
+			fmt.Sprintf("Failed to get statedb %s\n %s", address, err.Error()),
 			nil))
 		return
 	}
+
+	balance := statedb.GetBalance(binAddress).Uint64()
+	nonce := statedb.GetNonce(binAddress)
+
 	response := &view.PlainAddressState{}
-	response.AddressStateFromPBData(addressState.PBData())
+	response.FromData(binAddress, balance, nonce)
 
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
@@ -205,22 +215,29 @@ func (p *PublicAPIServer) GetBalance(w http.ResponseWriter, r *http.Request) {
 	}
 	vars := mux.Vars(r)
 	address := vars["address"]
-	binAddress, err := hex.DecodeString(address)
+	binData, err := misc.HexStrToBytes(address)
 	if err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
 			fmt.Sprintf("Error Decoding address %s\n %s", address, err.Error()),
 			nil))
 		return
 	}
-	addressState, err := p.chain.GetAddressState(binAddress)
+
+	var binAddress common.Address
+	copy(binAddress[:], binData)
+
+	statedb, err := p.chain.AccountDB()
 	if err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			fmt.Sprintf("Error loading address state %s\n %s", address, err.Error()),
+			fmt.Sprintf("Failed to get statedb %s\n %s", address, err.Error()),
 			nil))
 		return
 	}
+
+	balance := statedb.GetBalance(binAddress).Uint64()
+
 	response := view.PlainBalance{}
-	response.Balance = strconv.FormatUint(addressState.Balance(), 10)
+	response.Balance = strconv.FormatUint(balance, 10)
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
@@ -232,7 +249,7 @@ func (p *PublicAPIServer) GetHeight(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(429)
 		return
 	}
-	response := &GetHeightResponse{Height:p.chain.Height()}
+	response := &GetHeightResponse{Height: p.chain.Height()}
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
@@ -253,7 +270,7 @@ func (p *PublicAPIServer) GetEstimatedNetworkFee(w http.ResponseWriter, r *http.
 		return
 	}
 	// TODO: Fee needs to be calcuated by mean, median or mode
-	response := &GetEstimatedNetworkFeeResponse{Fee:"1"}
+	response := &GetEstimatedNetworkFeeResponse{Fee: "1"}
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
@@ -281,27 +298,14 @@ func (p *PublicAPIServer) BroadcastStakeTx(w http.ResponseWriter, r *http.Reques
 			nil))
 		return
 	}
-	sc, err := p.chain.GetStateContext()
-	if err != nil {
+	if err := p.chain.ValidateTransaction(tx.PBData()); err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Error getting state context for transaction validation",
-			nil))
-		return
-	}
-	if err := tx.SetAffectedAddress(sc); err != nil {
-		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Error setting affected address into state context for transaction validation",
-			nil))
-		return
-	}
-	if !tx.Validate(sc) {
-		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Transaction Validation Failed",
+			err.Error(),
 			nil))
 		return
 	}
 
-	txHash := tx.TxHash(tx.GetSigningHash())
+	txHash := tx.Hash()
 	err = p.chain.GetTransactionPool().Add(
 		tx,
 		txHash,
@@ -314,18 +318,18 @@ func (p *PublicAPIServer) BroadcastStakeTx(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	registerMessage := &messages.RegisterMessage {
-		Msg:&protos.LegacyMessage{
+	registerMessage := &messages.RegisterMessage{
+		Msg: &protos.LegacyMessage{
 			Data: &protos.LegacyMessage_StData{
-				StData:tx.PBData(),
+				StData: tx.PBData(),
 			},
-			FuncName:protos.LegacyMessage_ST,
+			FuncName: protos.LegacyMessage_ST,
 		},
-		MsgHash: hex.EncodeToString(txHash),
+		MsgHash: misc.BytesToHexStr(txHash[:]),
 	}
 	select {
 	case p.registerAndBroadcastChan <- registerMessage:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
 			"Transaction Broadcast Timeout",
 			nil))
@@ -333,7 +337,7 @@ func (p *PublicAPIServer) BroadcastStakeTx(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := &BroadcastTransactionResponse{
-		TransactionHash: hex.EncodeToString(txHash),
+		TransactionHash: misc.BytesToHexStr(txHash[:]),
 	}
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
@@ -362,27 +366,15 @@ func (p *PublicAPIServer) BroadcastTransferTx(w http.ResponseWriter, r *http.Req
 			nil))
 		return
 	}
-	sc, err := p.chain.GetStateContext()
-	if err != nil {
+
+	if err := p.chain.ValidateTransaction(tx.PBData()); err != nil {
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Error getting state context for transaction validation",
-			nil))
-		return
-	}
-	if err := tx.SetAffectedAddress(sc); err != nil {
-		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Error setting affected address into state context for transaction validation",
-			nil))
-		return
-	}
-	if !tx.Validate(sc) {
-		json.NewEncoder(w).Encode(p.prepareResponse(1,
-			"Transaction Validation Failed",
+			err.Error(),
 			nil))
 		return
 	}
 
-	txHash := tx.TxHash(tx.GetSigningHash())
+	txHash := tx.Hash()
 	err = p.chain.GetTransactionPool().Add(
 		tx,
 		txHash,
@@ -395,26 +387,80 @@ func (p *PublicAPIServer) BroadcastTransferTx(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	registerMessage := &messages.RegisterMessage {
-		Msg:&protos.LegacyMessage{
+	registerMessage := &messages.RegisterMessage{
+		Msg: &protos.LegacyMessage{
 			Data: &protos.LegacyMessage_TtData{
-				TtData:tx.PBData(),
+				TtData: tx.PBData(),
 			},
-			FuncName:protos.LegacyMessage_TT,
+			FuncName: protos.LegacyMessage_TT,
 		},
-		MsgHash: hex.EncodeToString(txHash),
+		MsgHash: misc.BytesToHexStr(txHash[:]),
 	}
 	select {
 	case p.registerAndBroadcastChan <- registerMessage:
-	case <-time.After(10*time.Second):
+	case <-time.After(10 * time.Second):
 		json.NewEncoder(w).Encode(p.prepareResponse(1,
 			"Transaction Broadcast Timeout",
 			nil))
 		return
 	}
 	response := &BroadcastTransactionResponse{
-		TransactionHash: hex.EncodeToString(txHash),
+		TransactionHash: misc.BytesToHexStr(txHash[:]),
 	}
+	json.NewEncoder(w).Encode(p.prepareResponse(0,
+		"",
+		response))
+}
+
+func (p *PublicAPIServer) EVMCall(w http.ResponseWriter, r *http.Request) {
+	// Check Rate Limit
+	if !p.visitors.isAllowed(r.RemoteAddr) {
+		w.WriteHeader(429)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	var evmCall view.EVMCall
+	err := decoder.Decode(&evmCall)
+	if err != nil {
+		json.NewEncoder(w).Encode(p.prepareResponse(1,
+			fmt.Sprintf("Error Decoding EVMCall \n%s", err.Error()),
+			nil))
+		return
+	}
+
+	output, err := misc.HexStrToBytes(evmCall.Address)
+	if err != nil {
+		json.NewEncoder(w).Encode(p.prepareResponse(1,
+			fmt.Sprintf("Error while decoding address \n%s", err.Error()),
+			nil))
+		return
+	}
+
+	var address common.Address
+	copy(address[:], output)
+
+	dataOutput, err := misc.HexStrToBytes(evmCall.Data)
+	if err != nil {
+		json.NewEncoder(w).Encode(p.prepareResponse(1,
+			fmt.Sprintf("Error while decoding data \n%s", err.Error()),
+			nil))
+		return
+	}
+
+	result, err := p.chain.EVMCall(address, dataOutput)
+
+	var response *EVMCallResponse
+	if err != nil {
+		response = &EVMCallResponse{
+			Result: err.Error(),
+		}
+	} else {
+		response = &EVMCallResponse{
+			Result: misc.BytesToHexStr(result),
+		}
+	}
+
 	json.NewEncoder(w).Encode(p.prepareResponse(0,
 		"",
 		response))
