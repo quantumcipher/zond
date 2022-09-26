@@ -5,10 +5,10 @@ import (
 )
 
 type State struct {
-	db db.DB
+	db *db.DB
 }
 
-func (s *State) DB() db.DB {
+func (s *State) DB() *db.DB {
 	return s.db
 }
 
@@ -17,7 +17,7 @@ func NewState(directory string, filename string) (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &State {
+	return &State{
 		d,
 	}, nil
 }

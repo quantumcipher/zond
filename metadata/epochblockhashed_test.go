@@ -3,15 +3,16 @@ package metadata
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
 	// "errors"
 	"fmt"
 
-	"github.com/golang/mock/gomock"
+	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/config"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
 
 	// "github.com/theQRL/zond/protos"
 	"go.etcd.io/bbolt"
@@ -33,17 +34,44 @@ func TestNewEpochBlockHashes(t *testing.T) {
 }
 
 func TestGetEpochBlockHashes(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
 	epoch := uint64(1)
 
 	slotNumber := epoch*config.GetDevConfig().BlocksPerEpoch + 1
 
 	epochBlockHashesMetadata := NewEpochBlockHashes(epoch)
-	epochBlockHashesMetadataSerialized, _ := epochBlockHashesMetadata.Serialize()
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(GetEpochBlockHashesKey(epoch))).Return(epochBlockHashesMetadataSerialized, nil).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
+
+	err = store.DB().Update(func(tx *bbolt.Tx) error {
+		mainBucket := tx.Bucket([]byte("DB"))
+		if mainBucket == nil {
+			_, err = tx.CreateBucket([]byte("DB"))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
+			return nil
+		}
+
+		err = epochBlockHashesMetadata.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	output, err := GetEpochBlockHashes(store, epoch)
 	if err != nil {
@@ -64,7 +92,7 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 
 	slotNumber := epoch*config.GetDevConfig().BlocksPerEpoch + 1
 
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
 
 	epochBlockHashesMetadata := NewEpochBlockHashes(epoch)
 
@@ -72,11 +100,11 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 	epochBlockHashesMetadata2.pbData.BlockHashesBySlotNumber[0].SlotNumber = 2000
 
 	epochBlockHashesMetadata3 := NewEpochBlockHashes(uint64(3))
-	epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes = append(epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes, headerHash)
+	epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes = append(epochBlockHashesMetadata3.pbData.BlockHashesBySlotNumber[0].HeaderHashes, headerHash[:])
 
 	testCases := []struct {
 		name             string
-		headerHash       []byte
+		headerHash       common.Hash
 		slotNumber       uint64
 		epochBlockHashes *EpochBlockHashes
 		expectedError    error
@@ -107,7 +135,7 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 			headerHash:       headerHash,
 			slotNumber:       3*config.GetDevConfig().BlocksPerEpoch + 0,
 			epochBlockHashes: epochBlockHashesMetadata3,
-			expectedError:    fmt.Errorf("Headerhash %s already exists", hex.EncodeToString(headerHash)),
+			expectedError:    fmt.Errorf("Headerhash %s already exists", hex.EncodeToString(headerHash[:])),
 		},
 	}
 	for i := range testCases {
@@ -123,18 +151,25 @@ func TestAddHeaderHashBySlotNumber(t *testing.T) {
 }
 
 func TestEpochBlockHashesCommit(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	db, err := bbolt.Open("./testdb3.txt", 0600, &bbolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
-	if err != nil {
-		t.Error(err.Error())
-	}
-
 	epoch := uint64(1)
 
 	epochBlockHashesMetadata := NewEpochBlockHashes(epoch)
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().DB().Return(db).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	err = store.DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))

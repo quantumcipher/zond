@@ -1,6 +1,10 @@
 package consensus
 
 import (
+	"reflect"
+	"sync"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	common2 "github.com/theQRL/go-qrllib/common"
 	"github.com/theQRL/go-qrllib/dilithium"
@@ -15,16 +19,13 @@ import (
 	"github.com/theQRL/zond/p2p"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/transactions"
-	"reflect"
-	"sync"
-	"time"
 )
 
 type POS struct {
 	config *config.Config
 	srv    *p2p.Server
 	chain  *chain.Chain
-	db     db.DB
+	db     *db.DB
 
 	/*
 		validators stores the dilithium based on seed available
@@ -458,7 +459,7 @@ func (p *POS) Stop() {
 	return
 }
 
-func NewPOS(srv *p2p.Server, chain *chain.Chain, db db.DB) *POS {
+func NewPOS(srv *p2p.Server, chain *chain.Chain, db *db.DB) *POS {
 	pos := &POS{
 		config:     config.GetConfig(),
 		srv:        srv,

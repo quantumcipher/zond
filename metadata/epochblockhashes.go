@@ -3,6 +3,8 @@ package metadata
 import (
 	"errors"
 	"fmt"
+	"reflect"
+
 	"github.com/golang/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/theQRL/zond/common"
@@ -11,7 +13,6 @@ import (
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
 	"go.etcd.io/bbolt"
-	"reflect"
 )
 
 type EpochBlockHashes struct {
@@ -93,7 +94,7 @@ func NewEpochBlockHashes(epoch uint64) *EpochBlockHashes {
 	}
 }
 
-func GetEpochBlockHashes(d db.DB,
+func GetEpochBlockHashes(d *db.DB,
 	epoch uint64) (*EpochBlockHashes, error) {
 	key := GetEpochBlockHashesKey(epoch)
 	data, err := d.Get(key)

@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/db"
@@ -75,7 +76,7 @@ func NewMainChainMetaData(finalizedBlockHeaderHash common.Hash, finalizedBlockSl
 	}
 }
 
-func GetMainChainMetaData(d db.DB) (*MainChainMetaData, error) {
+func GetMainChainMetaData(d *db.DB) (*MainChainMetaData, error) {
 	key := GetMainChainMetaDataKey()
 	data, err := d.Get(key)
 	if err != nil {

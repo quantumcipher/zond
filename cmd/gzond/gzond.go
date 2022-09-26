@@ -1,6 +1,11 @@
 package main
 
 import (
+	"io/ioutil"
+	"os"
+	"os/signal"
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/mattn/go-colorable"
 	log "github.com/sirupsen/logrus"
@@ -17,10 +22,6 @@ import (
 	"github.com/theQRL/zond/zond"
 	"github.com/theQRL/zond/zond/tracers"
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
-	"io/ioutil"
-	"os"
-	"os/signal"
-	"time"
 )
 
 var (
@@ -31,7 +32,7 @@ func ConfigCheck() bool {
 	return true
 }
 
-func run(c *chain.Chain, db db.DB, keys crypto.PrivKey) error {
+func run(c *chain.Chain, db *db.DB, keys crypto.PrivKey) error {
 	srv, err := p2p.NewServer(c)
 	if err != nil {
 		log.Error("Failed to initialize server")

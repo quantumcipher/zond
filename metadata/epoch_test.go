@@ -3,23 +3,24 @@ package metadata
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
+	"github.com/theQRL/zond/misc"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewEpochMetaData(t *testing.T) {
 	epoch := uint64(1)
-	prevSlotLastBlockHeaderHash := sha256.New().Sum([]byte("prevSlotLastBlockHeaderHash"))
+	prevSlotLastBlockHeaderHash := sha256.Sum256([]byte("prevSlotLastBlockHeaderHash"))
 
 	epochMetadata := NewEpochMetaData(epoch, prevSlotLastBlockHeaderHash, nil)
 
-	if string(epochMetadata.PrevSlotLastBlockHeaderHash()) != string(prevSlotLastBlockHeaderHash) {
-		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(prevSlotLastBlockHeaderHash), string(epochMetadata.PrevSlotLastBlockHeaderHash()))
+	if epochMetadata.PrevSlotLastBlockHeaderHash().String() != misc.BytesToHexStr(prevSlotLastBlockHeaderHash[:]) {
+		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", misc.BytesToHexStr(prevSlotLastBlockHeaderHash[:]), epochMetadata.PrevSlotLastBlockHeaderHash().String())
 	}
 
 	if epochMetadata.Epoch() != epoch {
@@ -28,37 +29,70 @@ func TestNewEpochMetaData(t *testing.T) {
 }
 
 func TestGetEpochMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
 	epoch := uint64(1)
 	currentBlockSlotNumber := uint64(178)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
+	parentHeaderHash2 := sha256.Sum256([]byte("parentHeaderHash2"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
 	slotNumber := uint64(178)
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"))
-	blockMetadataSerialized, _ := blockMetadata.Serialize()
+	trieRoot := sha256.Sum256([]byte("trieRoot"))
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, []byte("100"), trieRoot)
 
 	slotNumber2 := uint64(50)
-	blockMetadata2 := NewBlockMetaData(nil, parentHeaderHash, slotNumber2, []byte("100"))
-	blockMetadataSerialized2, _ := blockMetadata2.Serialize()
+	blockMetadata2 := NewBlockMetaData(parentHeaderHash2, parentHeaderHash, slotNumber2, []byte("100"), trieRoot)
 
 	epochMetadata := NewEpochMetaData(epoch, parentHeaderHash, nil)
-	epochMetadataSerialized, _ := epochMetadata.Serialize()
 
-	fmt.Printf("blockheader key is %s\n", GetBlockMetaDataKey(headerHash))
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(headerHash))).Return(blockMetadataSerialized, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(parentHeaderHash))).Return(blockMetadataSerialized2, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(GetEpochMetaDataKey(epoch, parentHeaderHash))).Return(epochMetadataSerialized, nil).AnyTimes()
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
+
+	err = store.DB().Update(func(tx *bbolt.Tx) error {
+		mainBucket := tx.Bucket([]byte("DB"))
+		if mainBucket == nil {
+			_, err = tx.CreateBucket([]byte("DB"))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
+			return nil
+		}
+
+		err = blockMetadata.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+
+		err = blockMetadata2.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+
+		err = epochMetadata.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	output, err := GetEpochMetaData(store, currentBlockSlotNumber, parentHeaderHash)
 	if err != nil {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.PrevSlotLastBlockHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", string(parentHeaderHash), string(output.PrevSlotLastBlockHeaderHash()))
+	if output.PrevSlotLastBlockHeaderHash().String() != misc.BytesToHexStr(parentHeaderHash[:]) {
+		t.Errorf("expected previous slot last block headerhash (%v), got (%v)", misc.BytesToHexStr(parentHeaderHash[:]), output.PrevSlotLastBlockHeaderHash().String())
 	}
 
 	if output.Epoch() != epoch {
@@ -68,7 +102,7 @@ func TestGetEpochMetaData(t *testing.T) {
 
 func TestAllotSlots(t *testing.T) {
 	epoch := uint64(1)
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
@@ -86,14 +120,8 @@ func TestAllotSlots(t *testing.T) {
 }
 
 func TestEpochCommit(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	db, err := bbolt.Open("./testdb4.txt", 0600, &bbolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
-	if err != nil {
-		t.Error(err.Error())
-	}
-
 	epoch := uint64(1)
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
@@ -107,8 +135,21 @@ func TestEpochCommit(t *testing.T) {
 
 	epochMetadata := NewEpochMetaData(epoch, headerHash, validators)
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().DB().Return(db).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	err = store.DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))

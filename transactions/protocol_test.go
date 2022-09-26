@@ -14,9 +14,9 @@ func TestProtoToProtocolTransaction(t *testing.T) {
 	networkID := uint64(1)
 	nonce := uint64(10)
 	protoTx := &protos.ProtocolTransaction{
-		NetworkId: networkID,
-		Nonce:     nonce,
-		Pk:        slaveXmss1PK,
+		ChainId: networkID,
+		Nonce:   nonce,
+		Pk:      slaveXmss1PK,
 	}
 
 	_ = ProtoToProtocolTransaction(protoTx)
@@ -30,16 +30,16 @@ func TestProtocolGenerateTxHash(t *testing.T) {
 	feeReward := uint64(0)
 	lastCoinBaseNonce := uint64(10)
 
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
+	transactionHash := sha256.Sum256([]byte("transactionHash"))
 
 	coinbase := NewCoinBase(networkId, blockProposerPK[:], blockProposerReward, attestorReward, feeReward, lastCoinBaseNonce)
 
-	expectedHash, _ := hex.DecodeString("7a6570e1444e255d6d3752ade13c6a2764804f62477be60f085dfebe143062cf")
+	expectedHash, _ := hex.DecodeString("4d43ca59c590a069f6c09b4344308a62af6cfc41d4cbb0a18b2846aa2ea8c6a2")
 
 	output := coinbase.GenerateTxHash(transactionHash)
 
-	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
-		t.Errorf("expected protocal signing hash (%v), got (%v)", hex.EncodeToString(output), hex.EncodeToString(expectedHash))
+	if hex.EncodeToString(output.Bytes()) != hex.EncodeToString(expectedHash) {
+		t.Errorf("expected protocal signing hash (%v), got (%v)", hex.EncodeToString(expectedHash), hex.EncodeToString(output.Bytes()))
 	}
 }
 
@@ -51,13 +51,13 @@ func TestGenerateUnSignedTxHash(t *testing.T) {
 	feeReward := uint64(0)
 	lastCoinBaseNonce := uint64(10)
 
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
+	transactionHash := sha256.Sum256([]byte("transactionHash"))
 
 	coinbase := NewCoinBase(networkId, blockProposerPK[:], blockProposerReward, attestorReward, feeReward, lastCoinBaseNonce)
 
-	expectedHash, _ := hex.DecodeString("7a6570e1444e255d6d3752ade13c6a2764804f62477be60f085dfebe143062cf")
+	expectedHash, _ := hex.DecodeString("4d43ca59c590a069f6c09b4344308a62af6cfc41d4cbb0a18b2846aa2ea8c6a2")
 
-	output := coinbase.GenerateUnSignedTxHash(transactionHash)
+	output := coinbase.GenerateUnSignedTxHash(transactionHash[:])
 
 	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
 		t.Errorf("expected protocal signing hash (%v), got (%v)", hex.EncodeToString(output), hex.EncodeToString(expectedHash))

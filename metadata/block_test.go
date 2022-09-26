@@ -3,24 +3,26 @@ package metadata
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/golang/mock/gomock"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
+	"github.com/theQRL/zond/misc"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewBlockMetaData(t *testing.T) {
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
+	trieRoot := sha256.Sum256([]byte("trieRoot"))
 	slotNumber := uint64(178)
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, trieRoot)
 
-	if string(blockMetadata.ParentHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected parent headerhash (%v), got (%v)", string(parentHeaderHash), string(blockMetadata.ParentHeaderHash()))
+	if blockMetadata.ParentHeaderHash().String() != misc.BytesToHexStr(parentHeaderHash[:]) {
+		t.Errorf("expected parent headerhash (%v), got (%v)", misc.BytesToHexStr(parentHeaderHash[:]), blockMetadata.ParentHeaderHash())
 	}
 
 	if blockMetadata.SlotNumber() != slotNumber {
@@ -29,26 +31,58 @@ func TestNewBlockMetaData(t *testing.T) {
 }
 
 func TestGetBlockMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
+	trieRoot := sha256.Sum256([]byte("trieRoot"))
 	slotNumber := uint64(178)
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
-	blockMetadataSerialized, _ := blockMetadata.Serialize()
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, trieRoot)
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(GetBlockMetaDataKey(headerHash))).Return(blockMetadataSerialized, nil).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
+
+	err = store.DB().Update(func(tx *bbolt.Tx) error {
+		mainBucket := tx.Bucket([]byte("DB"))
+		if mainBucket == nil {
+			_, err := tx.CreateBucket([]byte("DB"))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
+			return nil
+		}
+
+		err := blockMetadata.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Errorf("unexpected error committing to database (%v)", err)
+	}
 
 	output, err := GetBlockMetaData(store, headerHash)
 	if err != nil {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.ParentHeaderHash()) != string(parentHeaderHash) {
-		t.Errorf("expected parent headerhash (%v), got (%v)", string(parentHeaderHash), string(output.ParentHeaderHash()))
+	if output.ParentHeaderHash().String() != misc.BytesToHexStr(parentHeaderHash[:]) {
+		t.Errorf("expected parent headerhash (%v), got (%v)", misc.BytesToHexStr(parentHeaderHash[:]), output.ParentHeaderHash().String())
 	}
 
 	if output.SlotNumber() != slotNumber {
@@ -57,21 +91,29 @@ func TestGetBlockMetaData(t *testing.T) {
 }
 
 func TestBlockCommit(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	db, err := bbolt.Open("./testdb5.txt", 0600, &bbolt.Options{Timeout: 1 * time.Second, InitialMmapSize: 10e6})
-	if err != nil {
-		t.Error(err.Error())
-	}
-
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	headerHash := sha256.New().Sum([]byte("headerHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
+	headerHash := sha256.Sum256([]byte("headerHash"))
 	slotNumber := uint64(178)
+	trieRoot := sha256.Sum256([]byte("trieRoot"))
 	totalStakeAmount := []byte("100")
 
-	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount)
+	blockMetadata := NewBlockMetaData(parentHeaderHash, headerHash, slotNumber, totalStakeAmount, trieRoot)
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().DB().Return(db).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	err = store.DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))

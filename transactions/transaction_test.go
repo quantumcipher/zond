@@ -1,173 +1,45 @@
 package transactions
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
-	"github.com/theQRL/go-qrllib/xmss"
-	"github.com/theQRL/zond/address"
-	mockdb "github.com/theQRL/zond/db/mock"
-	"github.com/theQRL/zond/metadata"
-	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"
-	"github.com/theQRL/zond/state"
 )
 
 func TestProtoToTransaction(t *testing.T) {
-	masterAddr, _ := hex.DecodeString("0003009cf8640426af83ccd3adbdb3d290f71245")
-	slaveXmss1PK, _ := hex.DecodeString("000300252a2b71c81fde22419c528ba09bf025f145335c307e09dec6eeed5cff391b0ded8dd1b67f234394255f5dea219289f334f49e2f237c37e78097765796064aac")
+	masterDilithium := dilithium.New()
+	masterDilithiumPK := masterDilithium.GetPK()
 
 	networkID := uint64(1)
 	fee := uint64(1)
 	nonce := uint64(10)
 	protoTx := &protos.Transaction{
-		NetworkId:  networkID,
-		MasterAddr: masterAddr,
-		Fee:        fee,
-		Nonce:      nonce,
-		Pk:         slaveXmss1PK,
+		ChainId: networkID,
+		Gas:     fee,
+		Nonce:   nonce,
+		Pk:      masterDilithiumPK[:],
 	}
 
 	_ = ProtoToTransaction(protoTx)
 }
 
 func TestGenerateTxHash(t *testing.T) {
-	masterAddr, _ := hex.DecodeString("0003009cf8640426af83ccd3adbdb3d290f71245")
-	slaveXmss1PK, _ := hex.DecodeString("000300252a2b71c81fde22419c528ba09bf025f145335c307e09dec6eeed5cff391b0ded8dd1b67f234394255f5dea219289f334f49e2f237c37e78097765796064aac")
-	var slavePKs [][]byte
+	masterDilithiumPK, _ := hex.DecodeString("1998c3f1da2875b078cbb80dcfd96fb2d4249b1c1e4436ed42d26dd6341ca7873d5f42c9819fdc575e4316e933213b3a0de07a0de45893d92ba61686680ab706a48d30f3f869689777624762348f60cf68e7ad4d79734c370171f6543fc943cf8a2c41cee2b62691d8e6ab9c8001c155470eb072707fa442209f55ce9bee8d4741e8f6e6f3ce0ac9668f99dbc6937ffb6956a3635fa6b133229c4362ff98d8e301c079974503bef3d2d9b45e76294cbbdb3983fdcf0da1aec27c73c8166147d2ed3a74b87b544e17f8609370febcc6829fa8c863e8d87df62812dc743462d9a2aadd1cb51e2ada29f9451ae62cfd50cb27ffcd911a522a0ce757b30123ab0ae3277c6a9448f6763e1f73d026a2b85cca68ad848595207a9fd24e1848e6a10b6632017ae2c1bbe22478d5d2e83cea3a84b2f23ee5a0cff3e059070f3e4514a867f20d96be9017693d1dc1ff7b4c296bee5170689a7dca5725c29497efbfc514d677aba6ef05c795dce1b3a98decde4488e91d3009058e526a99bc5146f28cef5a7b4e8f7681c5f0c65e6afe7a0acb8884633760f7776a22cde28aa8d41d38f848a4d08b44aca29b5856a4316c3b002f7cae8ca1ce7f0e6ff13984afbdfe224a13b031bfcda49dc574edfd766284174bb0e1066eb28f536ebfddc07df7cfd73b7ee4ec10a4b20ca8a05ef1a13a9c9da3eb78722e8a37ff389805bb0e3896c8d97bacc406719edc9898edf6f3295f5ccc4ad884dca4e9a6a21da7d016de8caa9203e3a8e4a8b72cef8909e550828e928996724f4f1e6350893190d7ea9aa8304117093405b52f2e0fdee24fef40d87c9e0f94b0767fc7638493ca3c272ab0cee135c9274104aa50d0366688d24cf805a17ea31f36ad4ab48e8a22085d9189931e8188c0e7bc1b0b2ba6868badced85ee6e10574bb16d2e68df9323293556f194be6bc42eb4bc5961b3da428c577881aa64b90b390bbc31a0bd22036a602c9d672386cf9631564285d0dc75aa9de85f0a11e22b460b2c285d9819b27ef32b19d8d58ab04394409fb15d04a4378ad65f8efc509e2ecb26a862690a2627c010ceb78f35ab0e0e1adb5fd951f5dd8dce82c2a94c4dd02b40844c5f6e1a405fc276098717a5223ce2dd6a7ebc9376e2426f225451a162603a5dcd47dd7e891ba742b282533d20070a040d6c08e018a314a871d929de3a61867f32b0e719ef613bc1ac1f07af40c3ab47dd1e7e9093ca5bd72bc7e88175f8c3e81383966b0d0a8e898c88946c1bf9429ccfb85dbeedeebf2932c78e10996f2cc317a7ee2c9c3633dc689694349ab4d4bc2c7c0e749c8d674b38779805667a61238bb3ad44216606266eb12ebdc408b1ab1c88562fd77ff53eeb39caaf91bdf4bbee94ed1c8890c8748f40c91b206f5c8fc04c1ef5d064238b367544ceb4e8435a7834b1a238c3e2ebc37702ec44fe33a51f32c9725eebf884aebef889c15a416d523aa066ccebef0bd762111734650a76e83eead1035c36338ca67bf61979796540d3d3f61d29e93dc61c0e9de2d12580de66d080c79b354de2d9118d4326b021f940ba6b6fc09f18fd15d1329b1a50481f0d9befa1037dc136c8844c3c4070e78f0eba40b64b0a1b7ab8017ac2d21077d10d3c17747ae14241f1a67bcaaad0d8c9050aec3170d3098d13f23b6565fe821f1c8cb047149d990778defbc27fdd34528cdc8021e8cbe64e02247055411d30d46f29e9643a2ff35b350038047f40b233259533255d2865a4723e7c4ed83b695209a1c1b1c92b8a8c3f41647c7466b2e7922e0efc02af6aa28941233f688b7cb06ffd6e38a600d7e6a5e2db54f29298ee402ae801e02b6aa43e23fd79e62b5194f253c962c456bee7a6c6fae328a5fb4513bc998b74c95215d2d77f31223f6dddf2f1153bc55584207fb18fca620ac621e50b6e0c4f19ee485490310235b451c3c085f61c419a95d74e3086282066cb692ad51ce581b86c158022a5ce3b3bcc03fe8905d27621b3c58b5a2ec6434a7f5209512d5296968b937c2bc94c59899f435f996f4e90c027f092956465f0231ffe015677b92464cb19d5e")
+	addrTo, _ := hex.DecodeString("2032d59e92326a17c976b8b1b47845b142b96b48")
 
-	addrTo1 := "000500f162cf94b30c2a6b96f46d8fba2b361fd7"
-	addrTo2 := "00060053d675755dfa7060b53854ba894abf1995"
-	var addrsTo [][]byte
-	addrsTo = append(addrsTo, []byte(addrTo1))
-	addrsTo = append(addrsTo, []byte(addrTo2))
-
-	signingHash := sha256.New().Sum([]byte("signingHash"))
-
-	var amounts []uint64
-	amounts = append(amounts, 10)
-	amounts = append(amounts, 20)
+	amount := uint64(30)
 	fee := uint64(1)
 	message := []byte("message")
 	nonce := uint64(10)
 	networkID := uint64(1)
-	transfer := NewTransfer(networkID, addrsTo, amounts, fee, slavePKs, message, nonce, slaveXmss1PK[:], masterAddr[:])
+	transfer := NewTransfer(networkID, addrTo[:], amount, fee, 0, message, nonce, masterDilithiumPK[:])
 
-	expectedHash, _ := hex.DecodeString("689814d068b8d57fa9783a40bd5ebfe523fe0e64d190ff2f0f73949b3fad82e7")
+	expectedHash, _ := hex.DecodeString("14efaf472130509ed0cf5b42d61017d69ca7824638540c2f54b257273ce2eef6")
 
-	output := transfer.GenerateTxHash(signingHash)
-	if hex.EncodeToString(output) != hex.EncodeToString(expectedHash) {
-		t.Errorf("expected transaction hash (%v), got (%v)", hex.EncodeToString(expectedHash), hex.EncodeToString(output))
-	}
-}
-
-func TestValidateSlave(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	masterXmss := xmss.NewXMSSFromHeight(4, 0)
-	masterXmssPK := masterXmss.GetPK()
-	masterAddr := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((masterXmssPK[:])))
-
-	slaveXmss1 := xmss.NewXMSSFromHeight(6, 0)
-	slaveXmss1PK := slaveXmss1.GetPK()
-
-	networkID := uint64(1)
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-	validatorDilithium2 := dilithium.New()
-	validatorDilithium2PK := validatorDilithium2.GetPK()
-	var dilithiumPKs [][]byte
-	dilithiumPKs = append(dilithiumPKs, validatorDilithiumPK[:])
-	dilithiumPKs = append(dilithiumPKs, validatorDilithium2PK[:])
-
-	stake := true
-	fee := uint64(1)
-	nonce := uint64(10)
-
-	staking := NewStake(networkID, dilithiumPKs, stake, fee, nonce, slaveXmss1PK[:], masterAddr[:])
-	staking_case2 := NewStake(networkID, dilithiumPKs, stake, fee, nonce, masterXmssPK[:], masterAddr[:])
-	if staking.Stake() != stake {
-		t.Error("the stake is incorrectly set")
-	}
-	staking.Sign(slaveXmss1, staking.GetSigningHash())
-
-	var validators [][]byte
-	validators = append(validators, validatorDilithiumPK[:])
-	validators = append(validators, validatorDilithium2PK[:])
-	blockProposer := dilithium.New()
-	blockProposerPK := blockProposer.GetPK()
-	epoch := uint64(1)
-	slotNumber := uint64(100)
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	parentBlockHeaderHash := sha256.New().Sum([]byte("parentBlockHeaderHash"))
-	blockHeaderHash := sha256.New().Sum([]byte("blockHeaderHash"))
-	partialBlockSigningHash := sha256.New().Sum([]byte("partialBlockSigningHash"))
-	blockSigningHash := sha256.New().Sum([]byte("blockSigningHash"))
-	epochMetadata := metadata.NewEpochMetaData(epoch, parentBlockHeaderHash, validators)
-	epochMetadata.AllotSlots(1, epoch, parentBlockHeaderHash)
-	mainChainMetaData := metadata.NewMainChainMetaData(finalizedHeaderHash, 1,
-		parentBlockHeaderHash, 0)
-	mainChainMetaDataSerialized, _ := mainChainMetaData.Serialize()
-	epochBlockHashesMetadata := metadata.NewEpochBlockHashes(epoch)
-	epochBlockHashesMetadataSerialized, _ := epochBlockHashesMetadata.Serialize()
-	addressState := address.NewAddressState(masterAddr[:], nonce, 20000000000001)
-	addressesState := make(map[string]*address.AddressState)
-	addressesState[hex.EncodeToString(masterAddr[:])] = addressState
-	addressesStateSerialized, _ := addressState.Serialize()
-	dbAddressStateKey := address.GetAddressStateKey(masterAddr[:])
-	slaveMetadata1 := metadata.NewSlaveMetaData(sha256.New().Sum([]byte("transactionHash")), masterAddr[:], slaveXmss1PK[:])
-	slaveMetadataSerialized, _ := slaveMetadata1.Serialize()
-	slaveState := make(map[string]*metadata.SlaveMetaData)
-	slaveState[hex.EncodeToString(metadata.GetSlaveMetaDataKey(masterAddr[:], slaveXmss1PK[:]))] = slaveMetadata1
-
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(metadata.GetMainChainMetaDataKey())).Return(mainChainMetaDataSerialized, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(metadata.GetEpochBlockHashesKey(epoch))).Return(epochBlockHashesMetadataSerialized, nil).AnyTimes()
-	store.EXPECT().GetFromBucket(gomock.Eq(dbAddressStateKey), gomock.Eq(metadata.GetBlockBucketName(parentBlockHeaderHash))).Return(addressesStateSerialized, nil).AnyTimes()
-	store.EXPECT().
-		GetFromBucket(gomock.Eq(metadata.GetSlaveMetaDataKey(masterAddr[:], slaveXmss1PK[:])), gomock.Eq(metadata.GetBlockBucketName(parentBlockHeaderHash))).
-		Return(slaveMetadataSerialized, nil).AnyTimes()
-
-	stateContext, err := state.NewStateContext(store, slotNumber, blockProposerPK[:], finalizedHeaderHash, parentBlockHeaderHash, blockHeaderHash, partialBlockSigningHash,
-		blockSigningHash, epochMetadata)
-	stateContext.PrepareAddressState(hex.EncodeToString(masterAddr[:]))
-	stateContext.PrepareSlaveMetaData(hex.EncodeToString(masterAddr[:]), hex.EncodeToString(slaveXmss1PK[:]))
-	if err != nil {
-		t.Error("unexpected error while creating new statecontext ", err)
-	}
-
-	testCases := []struct {
-		name           string
-		staking        *Stake
-		stateContext   state.StateContext
-		expectedOutput bool
-	}{
-		{
-			name:           "ok",
-			staking:        staking,
-			stateContext:   *stateContext,
-			expectedOutput: true,
-		},
-		{
-			name:           "matching master and slave address",
-			staking:        staking_case2,
-			stateContext:   *stateContext,
-			expectedOutput: false,
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			output := tc.staking.ValidateSlave(&tc.stateContext)
-			if output != tc.expectedOutput {
-				t.Errorf("expected output of validate data to be (%v) but returned (%v)", tc.expectedOutput, output)
-			}
-
-		})
+	output := transfer.GenerateTxHash()
+	if hex.EncodeToString(output.Bytes()) != hex.EncodeToString(expectedHash) {
+		t.Errorf("expected transaction hash (%v), got (%v)", hex.EncodeToString(expectedHash), hex.EncodeToString(output.Bytes()))
 	}
 }

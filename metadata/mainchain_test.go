@@ -3,46 +3,74 @@ package metadata
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
+	"github.com/theQRL/zond/misc"
 	"go.etcd.io/bbolt"
 )
 
 func TestNewMainChainMetaData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := sha256.Sum256([]byte("lastblockHeaderhash"))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
 
-	if string(mainChainMetaData.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash) {
-		t.Errorf("expected finalized block header hash (%v), got (%v)", string(mainChainMetaData.FinalizedBlockHeaderHash()), string(finalizedBlockHeaderHash))
+	if mainChainMetaData.FinalizedBlockHeaderHash().String() != misc.BytesToHexStr(finalizedBlockHeaderHash[:]) {
+		t.Errorf("expected finalized block header hash (%v), got (%v)", misc.BytesToHexStr(finalizedBlockHeaderHash[:]), mainChainMetaData.FinalizedBlockHeaderHash().String())
 	}
 
-	if string(mainChainMetaData.LastBlockHeaderHash()) != string(lastBlockHeaderHash) {
-		t.Errorf("expected last block header hash (%v), got (%v)", string(mainChainMetaData.LastBlockHeaderHash()), string(lastBlockHeaderHash))
+	if mainChainMetaData.LastBlockHeaderHash().String() != misc.BytesToHexStr(lastBlockHeaderHash[:]) {
+		t.Errorf("expected last block header hash (%v), got (%v)", mainChainMetaData.LastBlockHeaderHash().String(), misc.BytesToHexStr(lastBlockHeaderHash[:]))
 	}
 }
 
 func TestGetMainChainMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := sha256.Sum256([]byte("lastblockHeaderhash"))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
 
-	mainChainMetaDataSerialized, _ := mainChainMetaData.Serialize()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(GetMainChainMetaDataKey()).Return(mainChainMetaDataSerialized, nil)
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
+
+	err = store.DB().Update(func(tx *bbolt.Tx) error {
+		mainBucket := tx.Bucket([]byte("DB"))
+		if mainBucket == nil {
+			_, err = tx.CreateBucket([]byte("DB"))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
+			return nil
+		}
+
+		err = mainChainMetaData.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	output, err := GetMainChainMetaData(store)
 
@@ -50,22 +78,22 @@ func TestGetMainChainMetaData(t *testing.T) {
 		t.Errorf("got unexpected error (%v)", err)
 	}
 
-	if string(output.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash) {
-		t.Errorf("expected finalized block header hash (%v), got (%v)", string(output.FinalizedBlockHeaderHash()), string(finalizedBlockHeaderHash))
+	if output.FinalizedBlockHeaderHash().String() != misc.BytesToHexStr(finalizedBlockHeaderHash[:]) {
+		t.Errorf("expected finalized block header hash (%v), got (%v)", misc.BytesToHexStr(finalizedBlockHeaderHash[:]), output.FinalizedBlockHeaderHash().String())
 	}
 
-	if string(output.LastBlockHeaderHash()) != string(lastBlockHeaderHash) {
-		t.Errorf("expected last block header hash (%v), got (%v)", string(output.LastBlockHeaderHash()), string(lastBlockHeaderHash))
+	if output.LastBlockHeaderHash().String() != misc.BytesToHexStr(lastBlockHeaderHash[:]) {
+		t.Errorf("expected last block header hash (%v), got (%v)", misc.BytesToHexStr(lastBlockHeaderHash[:]), output.LastBlockHeaderHash().String())
 	}
 }
 
 func TestUpdateFinalizedBlockData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := sha256.Sum256([]byte("lastblockHeaderhash"))
 	lastBlockSlotNumber := uint64(9)
 
-	finalizedBlockHeaderHash2 := sha256.New().Sum([]byte("finalizedHeaderHash2"))
+	finalizedBlockHeaderHash2 := sha256.Sum256([]byte("finalizedHeaderHash2"))
 	finalizedBlockSlotNumber2 := uint64(11)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -73,7 +101,7 @@ func TestUpdateFinalizedBlockData(t *testing.T) {
 
 	mainChainMetaData.UpdateFinalizedBlockData(finalizedBlockHeaderHash2, finalizedBlockSlotNumber2)
 
-	if string(mainChainMetaData.FinalizedBlockHeaderHash()) != string(finalizedBlockHeaderHash2) {
+	if mainChainMetaData.FinalizedBlockHeaderHash().String() != misc.BytesToHexStr(finalizedBlockHeaderHash2[:]) {
 		t.Errorf("the finalized block header hash not able to update")
 	}
 
@@ -83,12 +111,12 @@ func TestUpdateFinalizedBlockData(t *testing.T) {
 }
 
 func TestUpdateLastBlockData(t *testing.T) {
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := sha256.Sum256([]byte("lastblockHeaderhash"))
 	lastBlockSlotNumber := uint64(9)
 
-	lastBlockHeaderHash2 := sha256.New().Sum([]byte("lastHeaderHash2"))
+	lastBlockHeaderHash2 := sha256.Sum256([]byte("lastHeaderHash2"))
 	lastBlockSlotNumber2 := uint64(11)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
@@ -96,7 +124,7 @@ func TestUpdateLastBlockData(t *testing.T) {
 
 	mainChainMetaData.UpdateLastBlockData(lastBlockHeaderHash2, lastBlockSlotNumber2)
 
-	if string(mainChainMetaData.LastBlockHeaderHash()) != string(lastBlockHeaderHash2) {
+	if mainChainMetaData.LastBlockHeaderHash().String() != misc.BytesToHexStr(lastBlockHeaderHash2[:]) {
 		t.Errorf("the finalized block header hash not able to update")
 	}
 
@@ -106,21 +134,28 @@ func TestUpdateLastBlockData(t *testing.T) {
 }
 
 func TestCommit(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	db, err := bbolt.Open("./testdb2.txt", 0600, &bbolt.Options{InitialMmapSize: 10e6})
-	if err != nil {
-		t.Error(err.Error())
-	}
-
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
+	finalizedBlockHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
 	finalizedBlockSlotNumber := uint64(10)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
+	lastBlockHeaderHash := sha256.Sum256([]byte("lastblockHeaderhash"))
 	lastBlockSlotNumber := uint64(9)
 
 	mainChainMetaData := NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
 		lastBlockHeaderHash, lastBlockSlotNumber)
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().DB().Return(db).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 	err = store.DB().Update(func(tx *bbolt.Tx) error {
 		mainBucket := tx.Bucket([]byte("DB"))
 		if mainBucket == nil {

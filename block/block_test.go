@@ -4,47 +4,44 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/theQRL/go-qrllib/dilithium"
 	"github.com/theQRL/go-qrllib/xmss"
-	"github.com/theQRL/zond/address"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
 	"github.com/theQRL/zond/metadata"
-	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/ntp"
 	"github.com/theQRL/zond/protos"
 	"github.com/theQRL/zond/state"
+	"go.etcd.io/bbolt"
 )
 
 func TestNewBlock(t *testing.T) {
-	networkId := uint64(1)
+	ChainId := uint64(1)
 	timestamp := ntp.GetNTP().Time()
 	blockProposer := dilithium.New()
 	blockProposerPK := blockProposer.GetPK()
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	masterXmss := xmss.NewXMSSFromHeight(4, 0)
 	masterXmssPK := masterXmss.GetPK()
-	masterAddr := address.GetAddressStateKey(masterXmssPK[:])
 
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: masterAddr,
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         masterXmssPK[:],
-		Signature:  []byte("blocksignature"),
+		ChainId:   1,
+		Gas:       uint64(10),
+		Nonce:     uint64(10),
+		Pk:        masterXmssPK[:],
+		Signature: []byte("blocksignature"),
 	}
 	txs = append(txs, txn1)
-	fmt.Print(txs[0].Fee)
 	protocolTxs := make([]*protos.ProtocolTransaction, 100)
 	lastCoinBaseNonce := uint64(10)
 
-	newBlock := NewBlock(networkId, timestamp, blockProposerPK[:], slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
+	newBlock := NewBlock(ChainId, timestamp, blockProposerPK[:], slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
 
 	if newBlock.Timestamp() != timestamp {
 		t.Error("incorrect timestamp in new block")
@@ -60,16 +57,15 @@ func TestNewBlock(t *testing.T) {
 }
 
 func TestUpdateFinalizedEpoch(t *testing.T) {
-	ctrl := gomock.NewController(t)
 	epoch := uint64(1)
 	blockProposer := dilithium.New()
 	blockProposerPK := blockProposer.GetPK()
 	slotNumber := uint64(102)
-	finalizedHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	parentBlockHeaderHash := sha256.New().Sum([]byte("parentBlockHeaderHash"))
-	blockHeaderHash := sha256.New().Sum([]byte("blockHeaderHash"))
-	partialBlockSigningHash := sha256.New().Sum([]byte("partialBlockSigningHash"))
-	blockSigningHash := sha256.New().Sum([]byte("blockSigningHash"))
+	finalizedHeaderHash := sha256.Sum256([]byte("finalizedHeaderHash"))
+	parentBlockHeaderHash := sha256.Sum256([]byte("parentBlockHeaderHash"))
+	blockHeaderHash := sha256.Sum256([]byte("blockHeaderHash"))
+	partialBlockSigningHash := sha256.Sum256([]byte("partialBlockSigningHash"))
+	blockSigningHash := sha256.Sum256([]byte("blockSigningHash"))
 
 	validatorDilithium := dilithium.New()
 	validatorDilithiumPK := validatorDilithium.GetPK()
@@ -84,13 +80,45 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 	epochMetadata.AllotSlots(1, epoch, parentBlockHeaderHash)
 	mainChainMetaData := metadata.NewMainChainMetaData(finalizedHeaderHash, 1,
 		parentBlockHeaderHash, 0)
-	mainChainMetaDataSerialized, _ := mainChainMetaData.Serialize()
 	epochBlockHashesMetadata := metadata.NewEpochBlockHashes(epoch)
-	epochBlockHashesMetadataSerialized, _ := epochBlockHashesMetadata.Serialize()
 
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(metadata.GetMainChainMetaDataKey())).Return(mainChainMetaDataSerialized, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(metadata.GetEpochBlockHashesKey(epoch))).Return(epochBlockHashesMetadataSerialized, nil).AnyTimes()
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
+
+	err = store.DB().Update(func(tx *bbolt.Tx) error {
+		mainBucket := tx.Bucket([]byte("DB"))
+		if mainBucket == nil {
+			_, err := tx.CreateBucket([]byte("DB"))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
+			return nil
+		}
+
+		err := mainChainMetaData.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+		err = epochBlockHashesMetadata.Commit(mainBucket)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 
 	stateContext, err := state.NewStateContext(store, slotNumber, blockProposerPK[:], finalizedHeaderHash, parentBlockHeaderHash, blockHeaderHash, partialBlockSigningHash,
 		blockSigningHash, epochMetadata)
@@ -101,20 +129,18 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 
 	networkId := uint64(1)
 	timestamp := ntp.GetNTP().Time()
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	masterXmss := xmss.NewXMSSFromHeight(4, 0)
 	masterXmssPK := masterXmss.GetPK()
-	masterAddr := address.GetAddressStateKey(masterXmssPK[:])
 
 	var txs []*protos.Transaction
 	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: masterAddr,
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         masterXmssPK[:],
-		Signature:  []byte("blocksignature"),
+		ChainId:   1,
+		Gas:       uint64(10),
+		Nonce:     uint64(10),
+		Pk:        masterXmssPK[:],
+		Signature: []byte("blocksignature"),
 	}
 	txs = append(txs, txn1)
 
@@ -129,150 +155,6 @@ func TestUpdateFinalizedEpoch(t *testing.T) {
 	}
 }
 
-func TestProcessEpochMetaData(t *testing.T) {
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-	validatorDilithium2 := dilithium.New()
-	validatorDilithium2PK := validatorDilithium2.GetPK()
-	var validators [][]byte
-	validators = append(validators, validatorDilithiumPK[:])
-	validators = append(validators, validatorDilithium2PK[:])
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	epochMetadata := metadata.NewEpochMetaData(1, parentHeaderHash, validators)
-
-	validatorsStakeAmount := make(map[string]uint64)
-	validatorsStakeAmount[hex.EncodeToString(validatorDilithiumPK[:])] = 100
-	validatorsStakeAmount[hex.EncodeToString(validatorDilithium2PK[:])] = 200
-
-	networkId := uint64(1)
-	timestamp := ntp.GetNTP().Time()
-	slotNumber := uint64(120)
-
-	var txs []*protos.Transaction
-	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: address_[:],
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         validatorXmssPK[:],
-		Signature:  []byte("blocksignature"),
-	}
-	txs = append(txs, txn1)
-	var protocolTxs []*protos.ProtocolTransaction
-	ptxn1 := &protos.ProtocolTransaction{
-		NetworkId: 1,
-		Nonce:     10,
-		Pk:        validators[0],
-		Signature: []byte("blocksignature"),
-	}
-	protocolTxs = append(protocolTxs, ptxn1)
-	lastCoinBaseNonce := uint64(10)
-
-	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK[:], slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
-
-	err := newBlock.ProcessEpochMetaData(epochMetadata, validatorsStakeAmount)
-	if err != nil {
-		t.Error("got unexpected error while processing epoch metadata ", err)
-	}
-}
-
-func TestCalculateEpochMetaData(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	slotNumber := uint64(201)
-	parentSlotNumber := uint64(150)
-	parentSlotNumber2 := uint64(50)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
-	parentHeaderHash2 := sha256.New().Sum([]byte("parentHeaderHash2"))
-	totalStakeAmount := []byte("100")
-
-	parentBlockMetadata := metadata.NewBlockMetaData(parentHeaderHash2, parentHeaderHash, parentSlotNumber, totalStakeAmount)
-	parentBlockMetadataSerialized, _ := parentBlockMetadata.Serialize()
-
-	parentBlockMetadata2 := metadata.NewBlockMetaData(nil, parentHeaderHash2, parentSlotNumber2, totalStakeAmount)
-	parentBlockMetadataSerialized2, _ := parentBlockMetadata2.Serialize()
-
-	validatorXmss := xmss.NewXMSSFromHeight(4, 0)
-	validatorXmssPK := validatorXmss.GetPK()
-	address_ := xmss.GetXMSSAddressFromPK(misc.UnSizedPKToSizedPK((validatorXmssPK[:])))
-	validatorDilithium := dilithium.New()
-	validatorDilithiumPK := validatorDilithium.GetPK()
-	validatorDilithium2 := dilithium.New()
-	validatorDilithium2PK := validatorDilithium2.GetPK()
-	var validators [][]byte
-	validators = append(validators, validatorDilithiumPK[:])
-	validators = append(validators, validatorDilithium2PK[:])
-	epochMetadata := metadata.NewEpochMetaData(1, parentHeaderHash2, validators)
-	epochMetadataSerialized, _ := epochMetadata.Serialize()
-
-	finalizedBlockHeaderHash := sha256.New().Sum([]byte("finalizedHeaderHash"))
-	finalizedBlockSlotNumber := uint64(202)
-	lastBlockHeaderHash := sha256.New().Sum([]byte("lastblockHeaderhash"))
-	lastBlockSlotNumber := uint64(155)
-	mainChainMetaData := metadata.NewMainChainMetaData(finalizedBlockHeaderHash, finalizedBlockSlotNumber,
-		lastBlockHeaderHash, lastBlockSlotNumber)
-	mainChainMetaDataSerialized, _ := mainChainMetaData.Serialize()
-
-	transactionHash := sha256.New().Sum([]byte("transactionHash"))
-
-	dilithiumMetadata := metadata.NewDilithiumMetaData(transactionHash, validatorDilithiumPK[:], address_[:], true)
-	dilithiumMetadata.AddBalance(100)
-	dilithiumMetadataSerialized, _ := dilithiumMetadata.Serialize()
-
-	dilithiumMetadata2 := metadata.NewDilithiumMetaData(transactionHash, validatorDilithium2PK[:], address_[:], true)
-	dilithiumMetadata2.AddBalance(200)
-	dilithiumMetadataSerialized2, _ := dilithiumMetadata2.Serialize()
-
-	networkId := uint64(1)
-	timestamp := ntp.GetNTP().Time()
-
-	var txs []*protos.Transaction
-	txn1 := &protos.Transaction{
-		NetworkId:  1,
-		MasterAddr: address_[:],
-		Fee:        uint64(10),
-		Nonce:      uint64(10),
-		Pk:         validatorXmssPK[:],
-		Signature:  []byte("blocksignature"),
-	}
-	txs = append(txs, txn1)
-	var protocolTxs []*protos.ProtocolTransaction
-	ptxn1 := &protos.ProtocolTransaction{
-		NetworkId: 1,
-		Nonce:     10,
-		Pk:        validators[0],
-		Signature: []byte("blocksignature"),
-	}
-	protocolTxs = append(protocolTxs, ptxn1)
-	lastCoinBaseNonce := uint64(10)
-
-	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK[:], parentSlotNumber, parentHeaderHash2, txs, protocolTxs, lastCoinBaseNonce)
-	fmt.Print(newBlock)
-	newBlockSerialized, _ := newBlock.Serialize()
-
-	store := mockdb.NewMockDB(ctrl)
-	store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(parentHeaderHash))).Return(parentBlockMetadataSerialized, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(metadata.GetBlockMetaDataKey(parentHeaderHash2))).Return(parentBlockMetadataSerialized2, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(metadata.GetEpochMetaDataKey(1, parentHeaderHash2))).Return(epochMetadataSerialized, nil).AnyTimes()
-	store.EXPECT().Get(gomock.Eq(metadata.GetMainChainMetaDataKey())).Return(mainChainMetaDataSerialized, nil)
-	store.EXPECT().Get(gomock.Eq(GetBlockStorageKey(parentHeaderHash))).Return(newBlockSerialized, nil).AnyTimes()
-	store.EXPECT().
-		GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithiumPK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentHeaderHash"))))))).
-		Return(dilithiumMetadataSerialized, nil).AnyTimes()
-	store.EXPECT().
-		GetFromBucket(gomock.Eq([]byte(fmt.Sprintf("DILITHIUM-META-DATA-%s", hex.EncodeToString(validatorDilithium2PK[:])))), gomock.Eq([]byte(fmt.Sprintf("BLOCK-BUCKET-%s", hex.EncodeToString(sha256.New().Sum([]byte("parentHeaderHash"))))))).
-		Return(dilithiumMetadataSerialized2, nil).AnyTimes()
-
-	_, err := CalculateEpochMetaData(store, slotNumber,
-		parentHeaderHash, parentSlotNumber)
-
-	if err != nil {
-		t.Error("got unexpected error while calculating epoch metadata ", err)
-	}
-}
-
 func TestPartialBlockSigningHash(t *testing.T) {
 	validatorDilithiumPK, _ := hex.DecodeString("76d455148c84081a336b78f7761d26547fd0b47177536497187a9be83e13281336319c1134f47d7add05ab8fe2625380e74f7e309d7c7e9af7814b8e16795b9ee7a97e7c0fccd65ddd1030b816a051bf467546a540b9d69da4024a2223b7b18b65583d352004a1a45eca44acaf7d662d87130748b9f05fb9520e35ecdaf7a3b27eade2e2c052777c8a6dac5da8c982c58ad9ef303d6f4ec1d5719b58ad270c06d195b33bc9b972cf3ae7574a72ace289a9bd9837803b345640cbcfa595faef254f883471d08b8b1621924932632dbf30d9e4197afbd6dcd0fee5de410c5d650f32ad99afc2fb8247cf9a39cc0f9cb0f3c91cd43484ae95f38acf45a944a503ae0d67e05352165550a0fedaa4b34ee470771ea79964003ef02788dc315c1330018893bff075cc8d69defc09ec114e3dd96ef87321c6a097a8d32412ec113c081e299521c9e4ec82ab332f285ab86f1443cc01753be7875595cf4aa59d190d7f0fee0ef3981c141ac56dc33f30bd10f3c97eec09a97fff283453ec635ac59e90977fa94546eaeb83c287addb16a8a9df7de1523bbf90d13438e7fb2085040992d10635a0298b94411065e37fe6ddf80ce4bf06f6afc208e217605965a5ff5751c4645b88b8caa9bf2799bbe3e1952e77082d9a83485f6c71f7e788f5f365adbd38c5506e2cdab52081630554d53b646f86c40dc37faa348c4f227ef634d6bd41f028d78b91afc4a36ab02548cec53f847f47786ca07f70bf1bd2048087ee651deb2e31812f479de980213120a9c152fab124a2dcd2edf2e86ad1bdf248e8ae06be568c17b77424ed5ed80d5d909527a14869f0c1fbbf6f813c2d081a950da5aa43cf3667589855635eb38fdd6b7f708c738acdd760562dbb74c99b24ac77e7f789eae925122d77f9393df9e3f89b2db0c883da3292d40c755731e494f842433fd6f113a9763992d4acce8c3a39e3ca1e6c9023396179e1f3db30d57a981fab76018524f7db3e13161b4c20db6f8b20542800085d942390d9567a4c6863dc780e1363c5e853cf7ee1b0c3ab40a610df68b8f8543b768fd4b7f8b75d1581616919a41f6f1cc2d428c0a3c54a4a7d6fe0b62a94aec93a7e289354c69bce7e69b4008b6b84b4ffff60a4b2d177b26ab62b81ef958b393da9b50b6235eb574fd18e61e41e6f5064a756a73719ede8b7e2112457025867dd3faea3a5e40f306a8110de5d9bcd6460d8b2038b68a3a1f0df7f8f6e680cf106c1f33bc1ac757cb7e93d3911f0be4170d6aae1bf9d0127ec9bd110d22feaa59338b3057768a4e8b4cd4f05854d6845cde0a5d6a2e1c65a165ce0e13dc4711ce0e9b10604eef5956ac963c3014695c313e51561b16ff5a0d826c623af1d3769205ed376d0bd34232cfa1c51928306aa38359bbd4843b2798ca06702694db2805a2dd2a15a7f151b3e1bd49af3bccc75ce1e3bab813884fe23096340773df031bd8805e6885862b25fab4164d1f6b245156d227861b303fd56ca88fe3396ae74f5e9478329eac7d453b3cbc39e83d4ce1b4c5da8cab52a4673549b1ad8d07031b98c88af98b795d5914238669cc8d36bc2d2f6725c2ad24786a26d38e82b06f5c2e3e96afffeda1e91b6b0828b891ca0af03d91dc0022eefb47fbe281e5dec260d597fb2619c053ac68225c44873b464984507f218f053de458f02735745ef24339b44fbef5186c8552dd8a17b6a99edcf99a34ccd9293fb6a61e412c71c4d4f588b8fcb9024af0ec0dbdda62a51452f3fa39fdac1c7c41199684b22a5de3bbddcb5e20a5f80ee342cbffc7cebe37163394dac13152cb13ec381fff2b02f73b32a75c23b36608ff496be15f1053ae6a748182f27af21f4a19f0ab8c20e3b7c46f7077facf57b07fcd5e8120349a881243ea5b19376da432438b7fc4a125b6bf050606420b8a44a038c619464009dfdecbd90735c24b127af7908bdcb33f70f01473ac60c9a09599feecb466278a83271440412a38a20cdc8cc942975e1e9ac01aa3490d8e59e41b5bb3aa49513827b10643aeb4d0bba60be9cce3188e191ac44c3cd39eca9712c7d175bbc3822")
 	// validatorDilithiumSK, _ := hex.DecodeString("76d455148c84081a336b78f7761d26547fd0b47177536497187a9be83e1328137e911f2431cccd82bafad167e255b740637fbc8d2e8221d9b4e50abd5c755e855ff4f1ee4987694a762f4cdccd65cd55c6e7a75879b6ca6cd3db949ef9c84263edf00ca4981031817912ccf0fd0f2b1250505373017531410a2367699808062168816931114212377996a4a19708086533593a5a822819a090280133aa2538141a457270479172727a0769505851741852454246583a91842642189049703606656359784a09028317509a35994843874451068529167590635900943833379a6a54030622439150a90a822917397727a814960091559659321a4423a8766833000619760358067369880a0a11811466601144577060796099865a729088a03a2968a1388a17125743788526732922a098185a2837453853a493983963a216928325242735340689127300780362149a79707a31791002a6a645a395a548610044a879339547014aa801aa625579779644a2a893281a3324869724a6125184109a4442956a4a4439617275806245708493325907399181064560933a56428109901280647441633637a71811214a71a785584273a73a14496514a65401829a3a1066171960439a861a5386378884218887215543158a9061741431812426710767182687217850831680325075461a6545a75944727701a9614022a12193308a18193a182760a07227a961868584a3451182192a83761a116a528723774251461298a924a835693416581812631853973805380757779a78972348197a1380450423a4aaa76a0a6957623871a587828121528035521a196276094163809387218807a158143188498a933a310213951396a4a947911008a4018749645351528a890778918112253512888aa584963565699031524387053621064616540041724606a4482732889341908977885985a367067983a799883213989aa1517a86153a23565474073aa60397732297514a3847097703a871a26a1557790417a44371842267390525783103738048071896938099743961087922568a69540045a709466301447466675a9408569323973a181a9611a713265776831006086a870812a86092892050858682607168429313854566970866142103506574703218969369493159528a6477954470166148937445a052aa491625994584873037a28615a5810737a27a40351a983253a2a14a4a2a65977aa34944a0a4023a96493657802199489a975035023a7350a3a27316080a191005383256298a195550aa804394409083287063966228a9591491166751865a4573266a291153a8437a494430903150a713077142997925894a95345aa932757418978665349867698a03a48731aa58325517295362807837a207358358aa6a30a5597561919295a969920a64252aa6860460a39428423908196740606507250a1326885059463428116800626166562768511806329879805306418061a44746279256a02408782945a40622647598515395a262445a204a1397513012347180613016787848609458370094781064739582a341751997795a6932a4393585842a776a96764659789137404200a102590a901110187855103415729655453418525160390821a1099253842354795a02276176177552a42168692269296a570082819111089257676694839194227866367527673a71907218937850478712838902809913084615870846044502a75633114a62629151497142497972665e849a6a7a4a54d5f8c390235973eb2c1c68b555157852595d533780759596b67b52d59dde0c192ce472e69846dd21739a5c9cf1a41bf8bb21e8f5e168938da93e64a1cd1a7e6218b70f278b9dc7c47b82fb338f92579a0ba7475d763623782b541c6e63ff25cba8dd6258a7803fcfefc19ddae4aefb3d35bfc58c117fc59e64a2a2719a133463aa621dd62644c95eab0f5be4a26b7c5ed884a6fd28f0b97dae2c83b6ca885a45be020bdd7ac6ea4591c7088265fcb19b8e29126bd0e45aa918b9b1b7d98ab8e68d9b1bfcf2fde6196e6bd7fc6c6de5e75c40144497e8c81ab7af76c7c08243b6359b7eb2f1b791d620d2b65d7a176fe862fb6e81c8dc488b1af94e0e55b83f8251e693d2eb81b3cd254289a3979e4131c266f71c5e026f8e23122ac72d53c28db2df16392423022bfb8980b7fb8f8408ddb7ee73c7e4b853ac4a3551047c86e88a4ff5acb035358248c500a3e0d3ff49cabf56b9691e0e460b1cc20abb593f7c90f21ba422ba1bbddf3e2a1d71949c213c08afb167ce1b3393738e7866746c151f968fe602a66c865bce8aba711d18fc6abb89950273a41360f5beca3a972b5f55d829ed45d8a0036211390a01b7e041b91593f6375a84e76b858fe836b3316e27a41b2a4d9c7289402dfe15256334f2fe2a5c70d5125b2f6475ced8a138b363e8587715f73627c137a33e5255f856d9c1e6cc5866a3757fa2b795b2ca174770e356cb3a8d96f9254b70dbea3e6f0946ea25fa27c9934641e8234d5084afad4f5e037d9d40bbe707b8fda18a5adea5cf4ca8d9c979e4a02434a9308394bc593c7dd7b5c5dd140d96554ce4da2f95ce44513de3346f87db80b16a4406415fb16e1a75e7537e1ca7756810ea838407445c88ed0d5f35433e7cca3b8ec85f15500a86ce7386444d6d0b8d5c018f1ff3fbed3d18ef755bad5a15fd82801815e0eaf8fc52085e0d7363282f9219d7b44d4589199b67710220e7cc6d3204f23ae4f5cc2d41ee6eaaa8e031ca4abedf1d5abe42bc7bccb006ec3975d624ea93bfd165179c13cb6bd2f68516c934d9b098ecccf45e213254513dc78a2e6f33229eb28a14ad454aa4691064cc206dc063e52b16555aa36765cf0c386e2e030a21eeaa9ef21695df198fb33acb07858fd87416af76e0d66e6ac1dde83a59aa41b1ea1735347fd0afacebbe77d1a58ac6e48392ad2fb50761e32cda25670d6e44a4b2283d4eebaf758cf8231b0386577838c03e18be0fc0a0a5a219b88a4d63af45680e012295e9296486cff83719f8c8c904063787e4d31217d2e9eba43d0f99054cf2a20587b398a4cca54f119d3b1471bfbf4628a47832ba4aef34d8e912add04e846a7634bd39017dbadacc50676738f2103a1067c0959a72bd2893cfea149e6f993bd9e06162745c34d806e7ae711220e684cb15a361c6cc34904d9ae8b23418802e1fbf04071652b6d95b8e588f535da86163264686c5676029042ac9495587a829e8f30c7b543207bc630997f388aadd6bbd8dbc31889aebcb64aa8c551b6a6ebfef00211180b64dac0c389f4e1ee12d572c7fdca972fa432142357588db88a696c7ec0f3c0446dcb07e5c0f7c59b67467bd65854e2dd5e1c97c32f9589c86b4d2d1433ac8160e67e3e897d99f3199875253ad5265fb6196b315ac42312a9a1199e60c021922f800f0468924b04864c712e05ce21aaecdb8b162d2fb910b287a20fe228c8445961fd42dd526f3bab8d11b6bb5e56a4c5a652429452f4d72cd876a54b0edacf8c4f4bd5685e8b6e5725433b5632533263028ffca2f52f74d9409d81fe2ce16403d5f346f3956b05a92d88a8b0db63e41b0d9e738fe4fdae925af802784c95ce7195ad724177d0fb1b0adb2cd57b73cdb0961dfcb456f7336351a33029abc23317a545d355822c28ce1115bbed4aa2b910848c2937bfaaf85d7096d1299060daef9eead7031d1abcc9b59d0829b424b0c618725f23d0d4b2b1108ec0e70ee996fa5464cb123c41b115a0f0e475c1747e7d8b857dcef160d438c0ac420d4a2b3c1e8cc0f14a8ae0323100892ae3780944bf53ebb59f0974823c5428fedecb197cf73f10802e0a5a6826147a530885251a28185a9644f7e035d369cdd7d150fe05fe07d92267de54a667c71822266ace2d28b90b97045022d021327c2593465f6e4761506f3e2741ccfe4b657250371d2a3373a65eeb0f28c61ebb41a123d627d33c45b957481d8411605b1bda200608d6a9ea4ba93c27aadfbba54216990603ac430d3ed42332cf12fea636b9af6e0d91d41bb7ddca72e0e85d2cc357f45ccf33c86eec84d73f0c26eba57c53f376563653fa8fab33916260ba9639271f813d5b8b6acd6374367fe108a42bde60ac5a682caa81528d44ebbfdd89747d5ea691475495f88926e95bc50d540bddaac406bf3545a85d3c84937dea99169d0671902e22213d710a4b62866625caa910c42c985961069935b3a59ce10d2b695a0b00c2bb86b310a8947fa87c7d1913cdd834f13a0f230a24c5e8f853002435ad4b08b16acb1b8b0678b7a701e4d96369b8df21b3431072f3d37deef7393f74f25ad367957d40b725069e3ad3d6ef13b79b9354399eb5d4a7e92b57304e00895e6bf34f1c244657a50f267a035aff6af40285a924d0ad2e5f2e2a5a4b1cf4370622137576e57e00481586f11add047a1f88dc9e77ad0a69ea3c64008d54ca385fa61196118035c04525c13cb168af82b87139e863730ad8a6b4a87e1a111c0a22d781332ecfcf28e0e3c83fbea17a502e76afaef3342e768fbe0db88031c99865af5571f4d28094c6ea3f0039b1f90ddd3b8a0ad03f4923a742c11b2631ccc78d284500dd5caa240b27dd1ca8771ede2ab40c6c8c6dd9b26d2e9de7656800c770a094b9f92ebd20d88912713f785ef7cc8471f5cddd64016719375f090fbee86b42d1edc405d8cedcaf089a3fd314b1aa2cdd3fd80a77f36320f106506bf179996f5ae63e87eda9b7b414e95ba5584e56cc68600187e45adb829acfc34dc4a4e4c92830fe5d6cf1f6ba6cdd6e4c6a42f13339d9a818dd9a37ff6327fc21b067886bd6e36abe7a7932e6cea0d7c739a41892245182b6ef151fa39a2de2d3007619ae1cdb64f24a9490b4a766eabaf29cf28e5167a2549e812")
@@ -280,18 +162,18 @@ func TestPartialBlockSigningHash(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
 	lastCoinBaseNonce := uint64(10)
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK, slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
-	expected_hash := "e505b7c2a1a0ac26f00b4ab4cd080d97bfbe641d8b04c2a3656fa9a86b2cbb9f"
+	expected_hash := "0x94bd38943fc2688140676d8e126d3ca2d2b9c4ac073f78aba9b795fcfe265e3e"
 	partialBlockSigningHash := newBlock.PartialBlockSigningHash()
 
-	if hex.EncodeToString(partialBlockSigningHash) != expected_hash {
-		t.Errorf("expected partial block signing hash (%v), got (%v)", expected_hash, hex.EncodeToString(partialBlockSigningHash))
+	if partialBlockSigningHash.String() != expected_hash {
+		t.Errorf("expected partial block signing hash (%v), got (%v)", expected_hash, partialBlockSigningHash.String())
 	}
 }
 
@@ -302,18 +184,18 @@ func TestBlockSigningHash(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
 	lastCoinBaseNonce := uint64(10)
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK, slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
-	expected_hash := "e505b7c2a1a0ac26f00b4ab4cd080d97bfbe641d8b04c2a3656fa9a86b2cbb9f"
+	expected_hash := "0x94bd38943fc2688140676d8e126d3ca2d2b9c4ac073f78aba9b795fcfe265e3e"
 	blockSigningHash := newBlock.BlockSigningHash()
 
-	if hex.EncodeToString(blockSigningHash) != expected_hash {
-		t.Errorf("expected blocksigning hash (%v), got (%v)", expected_hash, hex.EncodeToString(blockSigningHash))
+	if blockSigningHash.String() != expected_hash {
+		t.Errorf("expected blocksigning hash (%v), got (%v)", expected_hash, blockSigningHash.String())
 	}
 }
 
@@ -323,7 +205,7 @@ func TestAttest(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
@@ -331,7 +213,7 @@ func TestAttest(t *testing.T) {
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK[:], slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
 
-	_, err := newBlock.Attest(networkId, validatorDilithium)
+	_, err := newBlock.Attest(networkId, validatorDilithium, lastCoinBaseNonce+1)
 	if err != nil {
 		t.Error("got unexpected error while attesting transaction ", err)
 	}
@@ -343,7 +225,7 @@ func TestAddAttestTx(t *testing.T) {
 	networkId := uint64(1)
 	timestamp := uint64(1658828941118)
 	slotNumber := uint64(120)
-	parentHeaderHash := sha256.New().Sum([]byte("parentHeaderHash"))
+	parentHeaderHash := sha256.Sum256([]byte("parentHeaderHash"))
 
 	var txs []*protos.Transaction
 	var protocolTxs []*protos.ProtocolTransaction
@@ -351,7 +233,7 @@ func TestAddAttestTx(t *testing.T) {
 
 	newBlock := NewBlock(networkId, timestamp, validatorDilithiumPK[:], slotNumber, parentHeaderHash, txs, protocolTxs, lastCoinBaseNonce)
 
-	attestTx, _ := newBlock.Attest(networkId, validatorDilithium)
+	attestTx, _ := newBlock.Attest(networkId, validatorDilithium, lastCoinBaseNonce+1)
 
 	newBlock.AddAttestTx(attestTx)
 

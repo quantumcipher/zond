@@ -95,7 +95,7 @@ func NewAddressState(address []byte, nonce uint64, balance uint64) *AddressState
 	return a
 }
 
-func GetAddressState(db db.DB, address []byte, lastBlockHeaderHash common.Hash,
+func GetAddressState(db *db.DB, address []byte, lastBlockHeaderHash common.Hash,
 	finalizedHeaderHash common.Hash) (*AddressState, error) {
 	key := GetAddressStateKey(address)
 

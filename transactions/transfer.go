@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+
 	"github.com/theQRL/zond/common"
 	"github.com/theQRL/zond/misc"
 	"github.com/theQRL/zond/protos"

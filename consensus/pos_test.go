@@ -2,20 +2,33 @@ package consensus
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/theQRL/zond/chain"
 	"github.com/theQRL/zond/config"
-	mockdb "github.com/theQRL/zond/db/mock"
+	"github.com/theQRL/zond/db"
 	"github.com/theQRL/zond/p2p"
 	"github.com/theQRL/zond/state"
 )
 
 func TestNewPOS(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mockdb.NewMockDB(ctrl)
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	state, _ := state.NewState("./", "testStateDb.txt")
 	defer os.Remove("testStateDb.txt")
@@ -30,8 +43,21 @@ func TestNewPOS(t *testing.T) {
 }
 
 func TestGetCurrentSlot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mockdb.NewMockDB(ctrl)
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	state, _ := state.NewState("./", "testStateDb.txt")
 	defer os.Remove("testStateDb.txt")
@@ -59,8 +85,21 @@ func TestGetCurrentSlot(t *testing.T) {
 }
 
 func TestTimeRemainingForNextAction(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mockdb.NewMockDB(ctrl)
+	dir, err := os.MkdirTemp("", "tempdir")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(dir) // clean up
+
+	file := filepath.Join(dir, "tmpfile")
+	if err := os.WriteFile(file, []byte(""), 0666); err != nil {
+		t.Error(err)
+	}
+
+	store, err := db.NewDB(dir, "tmpfile")
+	if err != nil {
+		t.Error("unexpected error while creating new db ", err)
+	}
 
 	state, _ := state.NewState("./", "testStateDb.txt")
 	defer os.Remove("testStateDb.txt")
